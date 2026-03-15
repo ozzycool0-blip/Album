@@ -32,7 +32,6 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // Crear usuario en Supabase Auth
     const { data: authData, error: authError } =
       await supabase.auth.admin.createUser({
         email,
@@ -49,7 +48,6 @@ export async function POST(req: NextRequest) {
 
     const authUserId = authData.user.id
 
-    // Insertar usuario en tabla users
     const { error: insertError } = await supabase
       .from('users')
       .insert([
@@ -74,10 +72,8 @@ export async function POST(req: NextRequest) {
       user_id: authUserId,
       message: 'Usuario creado correctamente',
     })
-
   } catch (error) {
     console.error(error)
-
     return NextResponse.json(
       { error: 'Error interno del servidor' },
       { status: 500 }
