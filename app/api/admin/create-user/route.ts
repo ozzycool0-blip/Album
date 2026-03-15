@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 
-export async function POST(req) {
+export async function POST(req: NextRequest) {
   try {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -32,6 +32,7 @@ export async function POST(req) {
       )
     }
 
+    // Crear usuario en Supabase Auth
     const { data: authData, error: authError } =
       await supabase.auth.admin.createUser({
         email,
@@ -48,6 +49,7 @@ export async function POST(req) {
 
     const authUserId = authData.user.id
 
+    // Insertar usuario en tabla users
     const { error: insertError } = await supabase
       .from('users')
       .insert([
@@ -72,7 +74,10 @@ export async function POST(req) {
       user_id: authUserId,
       message: 'Usuario creado correctamente',
     })
+
   } catch (error) {
+    console.error(error)
+
     return NextResponse.json(
       { error: 'Error interno del servidor' },
       { status: 500 }
