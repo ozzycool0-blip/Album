@@ -1,15 +1,28 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
-
-export async function POST(req: Request) {
+export async function POST(req) {
   try {
-    const body = await req.json()
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
+    if (!supabaseUrl) {
+      return NextResponse.json(
+        { error: 'Falta NEXT_PUBLIC_SUPABASE_URL' },
+        { status: 500 }
+      )
+    }
+
+    if (!serviceRoleKey) {
+      return NextResponse.json(
+        { error: 'Falta SUPABASE_SERVICE_ROLE_KEY' },
+        { status: 500 }
+      )
+    }
+
+    const supabase = createClient(supabaseUrl, serviceRoleKey)
+
+    const body = await req.json()
     const { email, password, full_name, tenant_id } = body
 
     if (!email || !password || !full_name || !tenant_id) {
@@ -19,7 +32,6 @@ export async function POST(req: Request) {
       )
     }
 
-    // 1. Crear usuario en Supabase Auth
     const { data: authData, error: authError } =
       await supabase.auth.admin.createUser({
         email,
@@ -36,7 +48,6 @@ export async function POST(req: Request) {
 
     const authUserId = authData.user.id
 
-    // 2. Crear usuario en tabla users
     const { error: insertError } = await supabase
       .from('users')
       .insert([
@@ -45,7 +56,7 @@ export async function POST(req: Request) {
           tenant_id,
           email,
           full_name,
-          role_id: 3, // collaborator
+          role_id: 3,
         },
       ])
 
