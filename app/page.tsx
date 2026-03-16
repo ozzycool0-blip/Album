@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@supabase/supabase-js'
 
 const supabase = createClient(
@@ -9,6 +10,8 @@ const supabase = createClient(
 )
 
 export default function LoginPage() {
+  const router = useRouter()
+
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
@@ -31,12 +34,13 @@ export default function LoginPage() {
       return
     }
 
-    window.location.href = '/dashboard'
+    router.push('/album')
   }
 
   return (
     <main className="min-h-screen flex items-center justify-center bg-gray-100">
       <div className="w-full max-w-md bg-white p-8 rounded-xl shadow">
+
         <h1 className="text-2xl font-bold text-center mb-6">
           Álbum Consulram
         </h1>
@@ -84,6 +88,7 @@ export default function LoginPage() {
           </button>
 
         </form>
+
       </div>
     </main>
   )
