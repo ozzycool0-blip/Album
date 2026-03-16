@@ -114,7 +114,9 @@ export default function AlbumClient() {
       if (stickersError) console.error('Error cargando stickers:', stickersError)
       if (issuedError) console.error('Error cargando stickers emitidos:', issuedError)
 
-      setSelections((selectionsData as Selection[]) || [])
+      const loadedSelections = (selectionsData as Selection[]) || []
+
+      setSelections(loadedSelections)
       setStickers((stickersData as Sticker[]) || [])
       setIssued((issuedData as IssuedSticker[]) || [])
       setCurrentSelectionIndex(0)
@@ -149,35 +151,14 @@ export default function AlbumClient() {
   }
 
   const issuedStickerIds = useMemo(() => new Set(issued.map((i) => i.sticker_id)), [issued])
-
   const totalStickers = stickers.length
   const obtained = issuedStickerIds.size
   const progress = totalStickers > 0 ? Math.round((obtained / totalStickers) * 100) : 0
-
-  const selectionStats = useMemo(() => {
-    return selections.map((selection) => {
-      const selectionStickers = stickers.filter((s) => s.selection_id === selection.id)
-      const total = selectionStickers.length
-      const obtainedCount = selectionStickers.filter((s) => issuedStickerIds.has(s.id)).length
-      const missing = total - obtainedCount
-
-      return {
-        selectionId: selection.id,
-        total,
-        obtained: obtainedCount,
-        missing,
-      }
-    })
-  }, [selections, stickers, issuedStickerIds])
 
   const currentSelection = selections[currentSelectionIndex] ?? null
   const currentSelectionStickers = currentSelection
     ? stickers.filter((s) => s.selection_id === currentSelection.id)
     : []
-
-  const currentSelectionStats = currentSelection
-    ? selectionStats.find((stat) => stat.selectionId === currentSelection.id)
-    : null
 
   const canGoPrev = currentSelectionIndex > 0
   const canGoNext = currentSelectionIndex < selections.length - 1
@@ -199,11 +180,11 @@ export default function AlbumClient() {
               <div>
                 <h1 className="text-2xl font-bold text-slate-900">Álbum HSEQ Consulram</h1>
                 <p className="mt-1 text-sm text-slate-600">Empresa: {companyName}</p>
-                <p className="text-sm text-slate-600">Usuario: {userName || email}</p>
+                <p className="text-sm text-slate-600">Usuario: {email}</p>
                 <p className="text-xs text-slate-500">Tenant: {tenantId}</p>
               </div>
 
-              <div className="min-w-[240px] rounded-xl bg-slate-50 p-4">
+              <div className="min-w-[220px] rounded-xl bg-slate-50 p-4">
                 <div className="mb-2 flex items-center justify-between text-sm font-medium text-slate-700">
                   <span>Progreso general</span>
                   <span>
@@ -219,34 +200,23 @@ export default function AlbumClient() {
               </div>
             </div>
 
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               <div className="flex flex-wrap gap-2">
                 {selections.map((selection, index) => {
                   const isActive = index === currentSelectionIndex
-                  const stats = selectionStats.find((s) => s.selectionId === selection.id)
 
                   return (
                     <button
                       key={selection.id}
                       onClick={() => setCurrentSelectionIndex(index)}
-                      className={`rounded-xl px-4 py-3 text-left text-sm font-semibold transition ${
+                      className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
                         isActive
                           ? 'bg-blue-600 text-white'
                           : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
                       }`}
                     >
-                      <div>
-                        {selection.number ? `${selection.number}. ` : ''}
-                        {selection.name}
-                      </div>
-
-                      <div
-                        className={`mt-1 text-xs font-medium ${
-                          isActive ? 'text-blue-100' : 'text-slate-500'
-                        }`}
-                      >
-                        Faltantes: {stats?.missing ?? 0} / {stats?.total ?? 0}
-                      </div>
+                      {selection.number ? `${selection.number}. ` : ''}
+                      {selection.name}
                     </button>
                   )
                 })}
@@ -299,21 +269,16 @@ export default function AlbumClient() {
             </p>
 
             <h2 className="mt-1 text-3xl font-bold text-slate-900">{currentSelection.name}</h2>
-
-            {currentSelection.description ? (
+  {currentSelection.description ? (
               <p className="mt-2 text-sm text-slate-500">{currentSelection.description}</p>
             ) : null}
-
             {currentSelection.introduccion ? (
               <p className="mt-3 max-w-4xl text-base leading-7 text-slate-700">
                 {currentSelection.introduccion}
               </p>
             ) : null}
 
-            <div className="mt-4 inline-flex rounded-full bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700">
-              Láminas faltantes en esta selección:{' '}
-              <span className="ml-2 font-bold">{currentSelectionStats?.missing ?? 0}</span>
-            </div>
+          
           </div>
 
           <div className="mt-6 grid grid-cols-2 gap-4 md:grid-cols-4 lg:grid-cols-5">
@@ -333,49 +298,39 @@ export default function AlbumClient() {
                     Lámina #{sticker.sticker_number}
                   </div>
 
-                  <div className="mt-1 min-h-[40px] text-sm font-semibold text-slate-900">
-                    {sticker.name}
-                  </div>
-
-                  {sticker.description ? (
-                    <p className="mt-1 min-h-[32px] text-xs text-slate-600">{sticker.description}</p>
-                  ) : (
-                    <div className="mt-1 min-h-[32px]" />
-                  )}
-
-                  <div className="mt-3 overflow-hidden rounded-lg border bg-white">
-                    {isObtained ? (
-                      sticker.art_asset_url ? (
-                        <Image
-                          src={sticker.art_asset_url}
-                          alt={sticker.name}
-                          width={300}
-                          height={400}
-                          className="h-auto w-full object-cover"
-                        />
-                      ) : (
-                        <div className="flex h-48 items-center justify-center text-sm text-slate-400">
-                          Sin imagen
-                        </div>
-                      )
-                    ) : (
-                      <div className="flex h-56 items-center justify-center rounded-lg border-2 border-dashed border-slate-300 bg-white text-center text-sm font-medium text-slate-400">
-                        Espacio vacío
+                  {isObtained ? (
+                    <>
+                      <div className="overflow-hidden rounded-lg border bg-white">
+                        {sticker.art_asset_url ? (
+                          <Image
+                            src={sticker.art_asset_url}
+                            alt={sticker.name}
+                            width={300}
+                            height={400}
+                            className="h-auto w-full object-cover"
+                          />
+                        ) : (
+                          <div className="flex h-48 items-center justify-center text-sm text-slate-400">
+                            Sin imagen
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
 
-                  <div className="mt-3">
-                    {isObtained ? (
-                      <div className="inline-flex rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-700">
+                      <div className="mt-3 text-sm font-semibold text-slate-900">{sticker.name}</div>
+
+                      {sticker.description ? (
+                        <p className="mt-1 text-xs text-slate-600">{sticker.description}</p>
+                      ) : null}
+
+                      <div className="mt-2 inline-flex rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-700">
                         Pegada
                       </div>
-                    ) : (
-                      <div className="inline-flex rounded-full bg-slate-200 px-3 py-1 text-xs font-semibold text-slate-600">
-                        Pendiente
-                      </div>
-                    )}
-                  </div>
+                    </>
+                  ) : (
+                    <div className="flex h-56 items-center justify-center rounded-lg border-2 border-dashed border-slate-300 bg-white text-center text-sm font-medium text-slate-400">
+                      Espacio vacío
+                    </div>
+                  )}
                 </div>
               )
             })}
