@@ -80,19 +80,19 @@ const UPLOAD_BUCKET = 'album-uploads'
  */
 const INTRO_REFERENCE_IMAGES: IntroReferenceImage[] = [
   {
-   src: '/stickers/premio1.png',
-    title: 'Premio # 1',
-  /*  description: 'Imagen guía cargada por el administrador.',*/
+    src: '/stickers/premio1.png',
+    title: 'premio1',
+    description: 'Imagen guía cargada por el administrador.',
   },
   {
     src: '/stickers/premio2.png',
-    title: 'Premio # 2',
-   /*  description: 'Segunda imagen guía para todos los usuarios.',*/
+    title: 'premio 2',
+    description: 'Segunda imagen guía para todos los usuarios.',
   },
   {
     src: '/stickers/premio3.png',
-    title: 'Premio # 3',
-   /* description: 'Tercera imagen de apoyo para completar esta selección.',*/
+    title: 'premio 3',
+    description: 'Tercera imagen de apoyo para completar esta selección.',
   },
 ]
 
@@ -498,6 +498,12 @@ export default function AlbumClient() {
                 <div className="absolute -right-10 -top-10 h-32 w-32 rounded-full bg-white/10 blur-2xl" />
                 <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-cyan-300/70 to-transparent" />
 
+                <div className="relative flex items-center gap-2 text-cyan-100">
+                  <ShieldIcon />
+                  <span className="text-[11px] font-black uppercase tracking-[0.28em]">
+                    Modo Panini
+                  </span>
+                </div>
 
                 <h1 className="relative mt-3 text-3xl font-black tracking-tight text-white">
                   Álbum HSEQ
@@ -519,7 +525,7 @@ export default function AlbumClient() {
                   </p>
                 </div>
 
-                <div className="relative mt-4 rounded-2xl border border-white/15 bg-white/10 p-4 shadow-inner">
+                <div className="relative mt-5 rounded-2xl border border-white/15 bg-white/10 p-4 shadow-inner">
                   <div className="mb-2 flex items-center justify-between text-sm font-bold text-white">
                     <span>Progreso del álbum</span>
                     <span>
@@ -544,7 +550,25 @@ export default function AlbumClient() {
                   </div>
                 </div>
 
-              </div> 
+                <div className="relative mt-4 grid grid-cols-2 gap-2 text-xs">
+                  <div className="rounded-2xl border border-white/10 bg-white/10 p-3 text-blue-50">
+                    <div className="font-black uppercase tracking-[0.16em] text-cyan-100/80">
+                      Láminas
+                    </div>
+                    <div className="mt-1 text-lg font-black text-white">
+                      {obtainedRegularStickers}/{totalRegularStickers}
+                    </div>
+                  </div>
+                  <div className="rounded-2xl border border-white/10 bg-white/10 p-3 text-blue-50">
+                    <div className="font-black uppercase tracking-[0.16em] text-cyan-100/80">
+                      Selección 0
+                    </div>
+                    <div className="mt-1 text-lg font-black text-white">
+                      {introSelection && userSelectionPhotos[introSelection.id]?.photo_url ? 'OK' : 'Pend.'}
+                    </div>
+                  </div>
+                </div>
+              </div>
 
               <div className="flex-1 overflow-y-auto p-3">
                 <div className="mb-3 flex items-center gap-2 px-2 text-xs font-black uppercase tracking-[0.24em] text-cyan-200/70">
@@ -719,10 +743,12 @@ export default function AlbumClient() {
                             Paso obligatorio
                           </div>
                           <h3 className="mt-3 text-xl font-black text-slate-900">
-                            RETO IA
+                            Sube tu foto para completar la selección 0
                           </h3>
                           <p className="mt-2 text-sm leading-6 text-slate-700">
-                            En esta selección no se entregan láminas. Todos los usuarios crear una foto ilustrada utilizando un GPT (Chatgpt,Gemini,claudeai entre otros) y subirla, una vez realices esto esta seleccion quedara completada. <span className="font-black"></span>
+                            En esta selección no se entregan láminas. Todos los usuarios deben
+                            subir una foto para marcar esta sección como completada. Las imágenes de
+                            referencia se cargan desde la carpeta <span className="font-black">/public/stickers</span>.
                           </p>
 
                           <div className="mt-4">
@@ -762,7 +788,7 @@ export default function AlbumClient() {
                             {userSelectionPhotos[currentSelection.id]?.photo_url ? 'Completa' : 'Pendiente'}
                           </div>
                           <div className="mt-3 text-sm text-slate-600">
-                           
+                            Esta selección cuenta como 1 paso dentro del progreso general del álbum.
                           </div>
                         </div>
                       </div>
@@ -772,12 +798,12 @@ export default function AlbumClient() {
                           <div className="mb-2 text-sm font-black uppercase tracking-[0.16em] text-slate-700">
                             Tu foto registrada
                           </div>
-                          <div className="overflow-hidden rounded-[20px] border border-slate-200 bg-white">
+                          <div className="overflow-hidden rounded-[24px] border border-slate-200 bg-white">
                             <Image
                               src={userSelectionPhotos[currentSelection.id].photo_url}
                               alt="Foto subida por el usuario"
-                              width={650}
-                              height={420}
+                              width={900}
+                              height={650}
                               className="h-auto w-full object-cover"
                             />
                           </div>
@@ -788,10 +814,10 @@ export default function AlbumClient() {
                     <div>
                       <div className="mb-4 flex items-center gap-2 text-lg font-black text-slate-900">
                         <BallIcon />
-                        Premios a entregar
+                        Fotos de referencia
                       </div>
                       <p className="mb-5 text-sm text-slate-600">
-                        <span className="font-black"></span>
+                        Estas imágenes se leen directamente desde la carpeta <span className="font-black">/public/stickers</span>.
                       </p>
 
                       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -801,8 +827,7 @@ export default function AlbumClient() {
                             className="overflow-hidden rounded-[24px] border border-slate-200 bg-[linear-gradient(180deg,#ffffff,#f8fafc)] shadow-sm"
                           >
                             <div className="overflow-hidden border-b border-slate-200 bg-white">
-                              <div className="text-sm font-black text-slate-900 text-center">{item.title}</div>
-				  <Image
+                              <Image
                                 src={item.src}
                                 alt={item.title}
                                 width={800}
@@ -811,8 +836,9 @@ export default function AlbumClient() {
                               />
                             </div>
                             <div className="p-4">
-                     
-                                                        
+                              <div className="text-sm font-black text-slate-900">{item.title}</div>
+                              <div className="mt-1 text-sm text-slate-600">{item.description}</div>
+                              <div className="mt-2 text-xs font-semibold text-slate-400">{item.src}</div>
                             </div>
                           </div>
                         ))}
@@ -917,4 +943,3 @@ export default function AlbumClient() {
     </main>
   )
 }
-
