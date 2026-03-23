@@ -65,7 +65,6 @@ type UserSelectionPhoto = {
 type IntroReferenceImage = {
   src: string
   title: string
-  description?: string
 }
 
 const INTRO_SELECTION_ORDER = 0
@@ -74,18 +73,9 @@ const USER_PHOTOS_TABLE = 'user_selection_photos'
 const UPLOAD_BUCKET = 'album-uploads'
 
 const INTRO_REFERENCE_IMAGES: IntroReferenceImage[] = [
-  {
-    src: '/stickers/premio1.png',
-    title: 'Premio # 1',
-  },
-  {
-    src: '/stickers/premio2.png',
-    title: 'Premio # 2',
-  },
-  {
-    src: '/stickers/premio3.png',
-    title: 'Premio # 3',
-  },
+  { src: '/stickers/premio1.png', title: 'Premio # 1' },
+  { src: '/stickers/premio2.png', title: 'Premio # 2' },
+  { src: '/stickers/premio3.png', title: 'Premio # 3' },
 ]
 
 function getSelectionStatusBadge(status?: SelectionStat['status']) {
