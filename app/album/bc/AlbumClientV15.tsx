@@ -498,12 +498,6 @@ export default function AlbumClient() {
                 <div className="absolute -right-10 -top-10 h-32 w-32 rounded-full bg-white/10 blur-2xl" />
                 <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-cyan-300/70 to-transparent" />
 
-                <div className="relative flex items-center gap-2 text-cyan-100">
-               
-                  <span className="text-[11px] font-black uppercase tracking-[0.28em]">
-               
-                  </span>
-                </div>
 
                 <h1 className="relative mt-3 text-3xl font-black tracking-tight text-white">
                   Álbum HSEQ
@@ -525,7 +519,7 @@ export default function AlbumClient() {
                   </p>
                 </div>
 
-                <div className="relative mt-5 rounded-2xl border border-white/15 bg-white/10 p-4 shadow-inner">
+                <div className="relative mt-4 rounded-2xl border border-white/15 bg-white/10 p-4 shadow-inner">
                   <div className="mb-2 flex items-center justify-between text-sm font-bold text-white">
                     <span>Progreso del álbum</span>
                     <span>
@@ -550,21 +544,6 @@ export default function AlbumClient() {
                   </div>
                 </div>
 
-              <div className="relative mt-4 grid grid-cols-2 gap-2 text-xs">
-                  <div className="rounded-2xl border border-white/10 bg-white/10 p-3 text-blue-50">
-                    <div className="font-black uppercase tracking-[0.16em] text-cyan-100/80">
-                      
-                    </div>
-                    <div className="mt-1 text-lg font-black text-white">
-                    </div>
-                  </div>
-                  <div className="rounded-2xl border border-white/10 bg-white/10 p-3 text-blue-50">
-                    <div className="font-black uppercase tracking-[0.16em] text-cyan-100/80">
-                      </div>
-                    <div className="mt-1 text-lg font-black text-white">
-                              </div>
-                  </div>
-                </div>
               </div> 
 
               <div className="flex-1 overflow-y-auto p-3">
@@ -793,12 +772,12 @@ export default function AlbumClient() {
                           <div className="mb-2 text-sm font-black uppercase tracking-[0.16em] text-slate-700">
                             Tu foto registrada
                           </div>
-                          <div className="overflow-hidden rounded-[24px] border border-slate-200 bg-white">
+                          <div className="overflow-hidden rounded-[20px] border border-slate-200 bg-white">
                             <Image
                               src={userSelectionPhotos[currentSelection.id].photo_url}
                               alt="Foto subida por el usuario"
-                              width={900}
-                              height={650}
+                              width={650}
+                              height={420}
                               className="h-auto w-full object-cover"
                             />
                           </div>
@@ -823,13 +802,15 @@ export default function AlbumClient() {
                           >
                             <div className="overflow-hidden border-b border-slate-200 bg-white">
                               <div className="text-sm font-black text-slate-900 text-center">{item.title}</div>
-				  <Image
-                                src={item.src}
-                                alt={item.title}
-                                width={800}
-                                height={600}
-                                className="h-60 w-full object-cover"
-                              />
+				<img
+  src={item.src}
+  alt={item.title}
+  className="h-60 w-full object-cover"
+  onError={(e) => {
+    console.error('No cargó premio:', item.src)
+    ;(e.currentTarget as HTMLImageElement).style.display = 'none'
+  }}
+/>
                             </div>
                             <div className="p-4">
                      
