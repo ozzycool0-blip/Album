@@ -1,5 +1,6 @@
-/** @type {import('next').NextConfig} */
-const nextConfig = {
+import type { NextConfig } from 'next'
+
+const nextConfig: NextConfig = {
   images: {
     localPatterns: [
       {
@@ -10,11 +11,10 @@ const nextConfig = {
       {
         protocol: 'https',
         hostname: 'ixjgeffkmxikmqhflguw.supabase.co',
-        port: '',
         pathname: '/storage/v1/object/public/album-uploads/**',
       },
     ],
   },
 }
 
-module.exports = nextConfig
+export default nextConfig

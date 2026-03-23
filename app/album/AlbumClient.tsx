@@ -1,7 +1,6 @@
 'use client'
 
 import { ChangeEvent, useEffect, useMemo, useState } from 'react'
-import Image from 'next/image'
 import { supabase } from '@/lib/supabase/client'
 
 type UserRow = {
@@ -66,7 +65,6 @@ type UserSelectionPhoto = {
 type IntroReferenceImage = {
   src: string
   title: string
-  description: string
 }
 
 const INTRO_SELECTION_ORDER = 0
@@ -74,26 +72,10 @@ const INTRO_SELECTION_NAME = 'Indicaciones de llenado'
 const USER_PHOTOS_TABLE = 'user_selection_photos'
 const UPLOAD_BUCKET = 'album-uploads'
 
-/**
- * Ajusta estos nombres para que coincidan con los archivos reales ubicados en:
- * /public/stickers
- */
 const INTRO_REFERENCE_IMAGES: IntroReferenceImage[] = [
-  {
-   src: '/stickers/premio1.png',
-    title: 'Premio # 1',
-  /*  description: 'Imagen guía cargada por el administrador.',*/
-  },
-  {
-    src: '/stickers/premio2.png',
-    title: 'Premio # 2',
-   /*  description: 'Segunda imagen guía para todos los usuarios.',*/
-  },
-  {
-    src: '/stickers/premio3.png',
-    title: 'Premio # 3',
-   /* description: 'Tercera imagen de apoyo para completar esta selección.',*/
-  },
+  { src: '/stickers/premio1.png', title: 'Premio # 1' },
+  { src: '/stickers/premio2.png', title: 'Premio # 2' },
+  { src: '/stickers/premio3.png', title: 'Premio # 3' },
 ]
 
 function getSelectionStatusBadge(status?: SelectionStat['status']) {
@@ -146,6 +128,35 @@ function BallIcon() {
   )
 }
 
+function ImageWithFallback({
+  src,
+  alt,
+  className,
+}: {
+  src: string
+  alt: string
+  className?: string
+}) {
+  const [hasError, setHasError] = useState(false)
+
+  if (!src || hasError) {
+    return (
+      <div className="flex h-60 w-full items-center justify-center bg-[linear-gradient(135deg,#f8fafc,#e2e8f0)] text-center text-sm font-black text-slate-500">
+        Imagen no disponible
+      </div>
+    )
+  }
+
+  return (
+    <img
+      src={src}
+      alt={alt}
+      className={className}
+      onError={() => setHasError(true)}
+    />
+  )
+}
+
 export default function AlbumClient() {
   const [currentUserId, setCurrentUserId] = useState('')
   const [email, setEmail] = useState('')
@@ -184,7 +195,7 @@ export default function AlbumClient() {
         .single<UserRow>()
 
       if (userError || !userRow || !userRow.tenant_id) {
-        console.error('No se pudo resolver el tenant del usuario')
+        console.error('No se pudo resolver el tenant del usuario', userError)
         setLoading(false)
         return
       }
@@ -392,22 +403,6 @@ export default function AlbumClient() {
     }, {})
   }, [stickers])
 
-  const totalRegularStickers = useMemo(
-    () =>
-      stickers.filter((sticker) => {
-        return sticker.selection_id !== introSelection?.id
-      }).length,
-    [stickers, introSelection]
-  )
-
-  const obtainedRegularStickers = useMemo(
-    () =>
-      stickers.filter((sticker) => {
-        return sticker.selection_id !== introSelection?.id && issuedStickerIds.has(sticker.id)
-      }).length,
-    [stickers, introSelection, issuedStickerIds]
-  )
-
   const selectionStats = useMemo<SelectionStat[]>(() => {
     return selections.map((selection) => {
       const isIntroSelection =
@@ -498,7 +493,6 @@ export default function AlbumClient() {
                 <div className="absolute -right-10 -top-10 h-32 w-32 rounded-full bg-white/10 blur-2xl" />
                 <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-cyan-300/70 to-transparent" />
 
-
                 <h1 className="relative mt-3 text-3xl font-black tracking-tight text-white">
                   Álbum HSEQ
                 </h1>
@@ -543,8 +537,7 @@ export default function AlbumClient() {
                     </span>
                   </div>
                 </div>
-
-              </div> 
+              </div>
 
               <div className="flex-1 overflow-y-auto p-3">
                 <div className="mb-3 flex items-center gap-2 px-2 text-xs font-black uppercase tracking-[0.24em] text-cyan-200/70">
@@ -722,7 +715,7 @@ export default function AlbumClient() {
                             RETO IA
                           </h3>
                           <p className="mt-2 text-sm leading-6 text-slate-700">
-                            En esta selección no se entregan láminas. Todos los usuarios crear una foto ilustrada utilizando un GPT (Chatgpt,Gemini,claudeai entre otros) y subirla, una vez realices esto esta seleccion quedara completada. <span className="font-black"></span>
+                            En esta selección no se entregan láminas. Todos los usuarios deben crear una foto ilustrada utilizando un GPT y subirla. Cuando lo hagan, esta selección quedará completada.
                           </p>
 
                           <div className="mt-4">
@@ -761,9 +754,6 @@ export default function AlbumClient() {
                           <div className="mt-2 text-lg font-black text-slate-900">
                             {userSelectionPhotos[currentSelection.id]?.photo_url ? 'Completa' : 'Pendiente'}
                           </div>
-                          <div className="mt-3 text-sm text-slate-600">
-                           
-                          </div>
                         </div>
                       </div>
 
@@ -773,11 +763,9 @@ export default function AlbumClient() {
                             Tu foto registrada
                           </div>
                           <div className="overflow-hidden rounded-[20px] border border-slate-200 bg-white">
-                            <Image
+                            <ImageWithFallback
                               src={userSelectionPhotos[currentSelection.id].photo_url}
                               alt="Foto subida por el usuario"
-                              width={650}
-                              height={420}
                               className="h-auto w-full object-cover"
                             />
                           </div>
@@ -790,9 +778,6 @@ export default function AlbumClient() {
                         <BallIcon />
                         Premios a entregar
                       </div>
-                      <p className="mb-5 text-sm text-slate-600">
-                        <span className="font-black"></span>
-                      </p>
 
                       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
                         {INTRO_REFERENCE_IMAGES.map((item) => (
@@ -801,18 +786,14 @@ export default function AlbumClient() {
                             className="overflow-hidden rounded-[24px] border border-slate-200 bg-[linear-gradient(180deg,#ffffff,#f8fafc)] shadow-sm"
                           >
                             <div className="overflow-hidden border-b border-slate-200 bg-white">
-                              <div className="text-sm font-black text-slate-900 text-center">{item.title}</div>
-				  <Image
+                              <div className="py-2 text-center text-sm font-black text-slate-900">
+                                {item.title}
+                              </div>
+                              <ImageWithFallback
                                 src={item.src}
                                 alt={item.title}
-                                width={800}
-                                height={600}
                                 className="h-60 w-full object-cover"
                               />
-                            </div>
-                            <div className="p-4">
-                     
-                                                        
                             </div>
                           </div>
                         ))}
@@ -869,11 +850,9 @@ export default function AlbumClient() {
                             <div className="mt-3 overflow-hidden rounded-[18px] border border-slate-200 bg-white">
                               {isObtained ? (
                                 sticker.art_asset_url ? (
-                                  <Image
+                                  <ImageWithFallback
                                     src={sticker.art_asset_url}
                                     alt={sticker.name}
-                                    width={300}
-                                    height={400}
                                     className="h-auto w-full object-cover"
                                   />
                                 ) : (
@@ -917,4 +896,3 @@ export default function AlbumClient() {
     </main>
   )
 }
-
