@@ -1,6 +1,7 @@
 'use client'
 
 import { ChangeEvent, useEffect, useMemo, useState } from 'react'
+import Image from 'next/image'
 import { supabase } from '@/lib/supabase/client'
 
 type UserRow = {
@@ -65,6 +66,291 @@ type UserSelectionPhoto = {
 type IntroReferenceImage = {
   src: string
   title: string
+  description?: string
+}
+
+
+type SelectionTheme = {
+  accent: string
+  accentSoft: string
+  accentSoftBorder: string
+  accentText: string
+  accentBadgeText: string
+  accentGradient: string
+  accentButton: string
+  accentButtonHover: string
+  accentShadow: string
+  accentCard: string
+  accentCardBorder: string
+  accentCardShadow: string
+  accentPillBg: string
+  accentPillBorder: string
+  accentPillText: string
+  accentMutedBg: string
+}
+
+const SELECTION_THEMES: SelectionTheme[] = [
+  {
+    accent: '#008445',
+    accentSoft: '#ecfdf5',
+    accentSoftBorder: '#a7f3d0',
+    accentText: 'text-emerald-800',
+    accentBadgeText: 'text-white',
+    accentGradient: 'linear-gradient(135deg,#008445,#10b981)',
+    accentButton: '#008445',
+    accentButtonHover: '#006b38',
+    accentShadow: '0 12px 24px rgba(0,132,69,0.22)',
+    accentCard: 'linear-gradient(180deg,#ffffff,#ecfdf5)',
+    accentCardBorder: '#a7f3d0',
+    accentCardShadow: '0 12px 28px rgba(0,132,69,0.14)',
+    accentPillBg: '#ecfdf5',
+    accentPillBorder: '#a7f3d0',
+    accentPillText: '#166534',
+    accentMutedBg: '#d1fae5',
+  },
+  {
+    accent: '#dc2626',
+    accentSoft: '#fef2f2',
+    accentSoftBorder: '#fecaca',
+    accentText: 'text-red-800',
+    accentBadgeText: 'text-white',
+    accentGradient: 'linear-gradient(135deg,#dc2626,#ef4444)',
+    accentButton: '#dc2626',
+    accentButtonHover: '#b91c1c',
+    accentShadow: '0 12px 24px rgba(220,38,38,0.22)',
+    accentCard: 'linear-gradient(180deg,#ffffff,#fef2f2)',
+    accentCardBorder: '#fecaca',
+    accentCardShadow: '0 12px 28px rgba(220,38,38,0.14)',
+    accentPillBg: '#fef2f2',
+    accentPillBorder: '#fecaca',
+    accentPillText: '#991b1b',
+    accentMutedBg: '#fee2e2',
+  },
+  {
+    accent: '#2563eb',
+    accentSoft: '#eff6ff',
+    accentSoftBorder: '#bfdbfe',
+    accentText: 'text-blue-800',
+    accentBadgeText: 'text-white',
+    accentGradient: 'linear-gradient(135deg,#2563eb,#3b82f6)',
+    accentButton: '#2563eb',
+    accentButtonHover: '#1d4ed8',
+    accentShadow: '0 12px 24px rgba(37,99,235,0.22)',
+    accentCard: 'linear-gradient(180deg,#ffffff,#eff6ff)',
+    accentCardBorder: '#bfdbfe',
+    accentCardShadow: '0 12px 28px rgba(37,99,235,0.14)',
+    accentPillBg: '#eff6ff',
+    accentPillBorder: '#bfdbfe',
+    accentPillText: '#1e40af',
+    accentMutedBg: '#dbeafe',
+  },
+  {
+    accent: '#7c3aed',
+    accentSoft: '#f5f3ff',
+    accentSoftBorder: '#ddd6fe',
+    accentText: 'text-violet-800',
+    accentBadgeText: 'text-white',
+    accentGradient: 'linear-gradient(135deg,#7c3aed,#8b5cf6)',
+    accentButton: '#7c3aed',
+    accentButtonHover: '#6d28d9',
+    accentShadow: '0 12px 24px rgba(124,58,237,0.22)',
+    accentCard: 'linear-gradient(180deg,#ffffff,#f5f3ff)',
+    accentCardBorder: '#ddd6fe',
+    accentCardShadow: '0 12px 28px rgba(124,58,237,0.14)',
+    accentPillBg: '#f5f3ff',
+    accentPillBorder: '#ddd6fe',
+    accentPillText: '#5b21b6',
+    accentMutedBg: '#ede9fe',
+  },
+  {
+    accent: '#ea580c',
+    accentSoft: '#fff7ed',
+    accentSoftBorder: '#fed7aa',
+    accentText: 'text-orange-800',
+    accentBadgeText: 'text-white',
+    accentGradient: 'linear-gradient(135deg,#ea580c,#f97316)',
+    accentButton: '#ea580c',
+    accentButtonHover: '#c2410c',
+    accentShadow: '0 12px 24px rgba(234,88,12,0.22)',
+    accentCard: 'linear-gradient(180deg,#ffffff,#fff7ed)',
+    accentCardBorder: '#fed7aa',
+    accentCardShadow: '0 12px 28px rgba(234,88,12,0.14)',
+    accentPillBg: '#fff7ed',
+    accentPillBorder: '#fed7aa',
+    accentPillText: '#9a3412',
+    accentMutedBg: '#ffedd5',
+  },
+  {
+    accent: '#0891b2',
+    accentSoft: '#ecfeff',
+    accentSoftBorder: '#a5f3fc',
+    accentText: 'text-cyan-800',
+    accentBadgeText: 'text-white',
+    accentGradient: 'linear-gradient(135deg,#0891b2,#06b6d4)',
+    accentButton: '#0891b2',
+    accentButtonHover: '#0e7490',
+    accentShadow: '0 12px 24px rgba(8,145,178,0.22)',
+    accentCard: 'linear-gradient(180deg,#ffffff,#ecfeff)',
+    accentCardBorder: '#a5f3fc',
+    accentCardShadow: '0 12px 28px rgba(8,145,178,0.14)',
+    accentPillBg: '#ecfeff',
+    accentPillBorder: '#a5f3fc',
+    accentPillText: '#155e75',
+    accentMutedBg: '#cffafe',
+  },
+  {
+    accent: '#ca8a04',
+    accentSoft: '#fefce8',
+    accentSoftBorder: '#fde68a',
+    accentText: 'text-yellow-800',
+    accentBadgeText: 'text-slate-950',
+    accentGradient: 'linear-gradient(135deg,#ca8a04,#eab308)',
+    accentButton: '#ca8a04',
+    accentButtonHover: '#a16207',
+    accentShadow: '0 12px 24px rgba(202,138,4,0.22)',
+    accentCard: 'linear-gradient(180deg,#ffffff,#fefce8)',
+    accentCardBorder: '#fde68a',
+    accentCardShadow: '0 12px 28px rgba(202,138,4,0.14)',
+    accentPillBg: '#fefce8',
+    accentPillBorder: '#fde68a',
+    accentPillText: '#854d0e',
+    accentMutedBg: '#fef9c3',
+  },
+  {
+    accent: '#be185d',
+    accentSoft: '#fdf2f8',
+    accentSoftBorder: '#fbcfe8',
+    accentText: 'text-pink-800',
+    accentBadgeText: 'text-white',
+    accentGradient: 'linear-gradient(135deg,#be185d,#ec4899)',
+    accentButton: '#be185d',
+    accentButtonHover: '#9d174d',
+    accentShadow: '0 12px 24px rgba(190,24,93,0.22)',
+    accentCard: 'linear-gradient(180deg,#ffffff,#fdf2f8)',
+    accentCardBorder: '#fbcfe8',
+    accentCardShadow: '0 12px 28px rgba(190,24,93,0.14)',
+    accentPillBg: '#fdf2f8',
+    accentPillBorder: '#fbcfe8',
+    accentPillText: '#9d174d',
+    accentMutedBg: '#fce7f3',
+  },
+  {
+    accent: '#4f46e5',
+    accentSoft: '#eef2ff',
+    accentSoftBorder: '#c7d2fe',
+    accentText: 'text-indigo-800',
+    accentBadgeText: 'text-white',
+    accentGradient: 'linear-gradient(135deg,#4f46e5,#6366f1)',
+    accentButton: '#4f46e5',
+    accentButtonHover: '#4338ca',
+    accentShadow: '0 12px 24px rgba(79,70,229,0.22)',
+    accentCard: 'linear-gradient(180deg,#ffffff,#eef2ff)',
+    accentCardBorder: '#c7d2fe',
+    accentCardShadow: '0 12px 28px rgba(79,70,229,0.14)',
+    accentPillBg: '#eef2ff',
+    accentPillBorder: '#c7d2fe',
+    accentPillText: '#3730a3',
+    accentMutedBg: '#e0e7ff',
+  },
+  {
+    accent: '#059669',
+    accentSoft: '#ecfdf5',
+    accentSoftBorder: '#a7f3d0',
+    accentText: 'text-emerald-800',
+    accentBadgeText: 'text-white',
+    accentGradient: 'linear-gradient(135deg,#059669,#34d399)',
+    accentButton: '#059669',
+    accentButtonHover: '#047857',
+    accentShadow: '0 12px 24px rgba(5,150,105,0.22)',
+    accentCard: 'linear-gradient(180deg,#ffffff,#ecfdf5)',
+    accentCardBorder: '#a7f3d0',
+    accentCardShadow: '0 12px 28px rgba(5,150,105,0.14)',
+    accentPillBg: '#ecfdf5',
+    accentPillBorder: '#a7f3d0',
+    accentPillText: '#065f46',
+    accentMutedBg: '#d1fae5',
+  },
+  {
+    accent: '#9333ea',
+    accentSoft: '#faf5ff',
+    accentSoftBorder: '#e9d5ff',
+    accentText: 'text-purple-800',
+    accentBadgeText: 'text-white',
+    accentGradient: 'linear-gradient(135deg,#9333ea,#a855f7)',
+    accentButton: '#9333ea',
+    accentButtonHover: '#7e22ce',
+    accentShadow: '0 12px 24px rgba(147,51,234,0.22)',
+    accentCard: 'linear-gradient(180deg,#ffffff,#faf5ff)',
+    accentCardBorder: '#e9d5ff',
+    accentCardShadow: '0 12px 28px rgba(147,51,234,0.14)',
+    accentPillBg: '#faf5ff',
+    accentPillBorder: '#e9d5ff',
+    accentPillText: '#6b21a8',
+    accentMutedBg: '#f3e8ff',
+  },
+  {
+    accent: '#0f766e',
+    accentSoft: '#f0fdfa',
+    accentSoftBorder: '#99f6e4',
+    accentText: 'text-teal-800',
+    accentBadgeText: 'text-white',
+    accentGradient: 'linear-gradient(135deg,#0f766e,#14b8a6)',
+    accentButton: '#0f766e',
+    accentButtonHover: '#115e59',
+    accentShadow: '0 12px 24px rgba(15,118,110,0.22)',
+    accentCard: 'linear-gradient(180deg,#ffffff,#f0fdfa)',
+    accentCardBorder: '#99f6e4',
+    accentCardShadow: '0 12px 28px rgba(15,118,110,0.14)',
+    accentPillBg: '#f0fdfa',
+    accentPillBorder: '#99f6e4',
+    accentPillText: '#115e59',
+    accentMutedBg: '#ccfbf1',
+  },
+  {
+    accent: '#b45309',
+    accentSoft: '#fffbeb',
+    accentSoftBorder: '#fcd34d',
+    accentText: 'text-amber-800',
+    accentBadgeText: 'text-white',
+    accentGradient: 'linear-gradient(135deg,#b45309,#f59e0b)',
+    accentButton: '#b45309',
+    accentButtonHover: '#92400e',
+    accentShadow: '0 12px 24px rgba(180,83,9,0.22)',
+    accentCard: 'linear-gradient(180deg,#ffffff,#fffbeb)',
+    accentCardBorder: '#fcd34d',
+    accentCardShadow: '0 12px 28px rgba(180,83,9,0.14)',
+    accentPillBg: '#fffbeb',
+    accentPillBorder: '#fcd34d',
+    accentPillText: '#92400e',
+    accentMutedBg: '#fef3c7',
+  },
+  {
+    accent: '#334155',
+    accentSoft: '#f8fafc',
+    accentSoftBorder: '#cbd5e1',
+    accentText: 'text-slate-800',
+    accentBadgeText: 'text-white',
+    accentGradient: 'linear-gradient(135deg,#334155,#64748b)',
+    accentButton: '#334155',
+    accentButtonHover: '#1e293b',
+    accentShadow: '0 12px 24px rgba(51,65,85,0.22)',
+    accentCard: 'linear-gradient(180deg,#ffffff,#f8fafc)',
+    accentCardBorder: '#cbd5e1',
+    accentCardShadow: '0 12px 28px rgba(51,65,85,0.14)',
+    accentPillBg: '#f8fafc',
+    accentPillBorder: '#cbd5e1',
+    accentPillText: '#334155',
+    accentMutedBg: '#e2e8f0',
+  },
+]
+
+function getSelectionTheme(index: number) {
+  return SELECTION_THEMES[index % SELECTION_THEMES.length]
+}
+
+function getSelectionShield(selection: Selection, index: number) {
+  const selectionNumber = selection.number ?? index + 1
+  return `/stickers/Escudo-Sele${selectionNumber}.png`
 }
 
 const INTRO_SELECTION_ORDER = 0
@@ -73,9 +359,18 @@ const USER_PHOTOS_TABLE = 'user_selection_photos'
 const UPLOAD_BUCKET = 'album-uploads'
 
 const INTRO_REFERENCE_IMAGES: IntroReferenceImage[] = [
-  { src: '/stickers/premio1.png', title: 'Premio # 1' },
-  { src: '/stickers/premio2.png', title: 'Premio # 2' },
-  { src: '/stickers/premio3.png', title: 'Premio # 3' },
+  {
+    src: '/stickers/premio1.png',
+    title: 'Premio # 1',
+  },
+  {
+    src: '/stickers/premio2.png',
+    title: 'Premio # 2',
+  },
+  {
+    src: '/stickers/premio3.png',
+    title: 'Premio # 3',
+  },
 ]
 
 function getSelectionStatusBadge(status?: SelectionStat['status']) {
@@ -128,35 +423,6 @@ function BallIcon() {
   )
 }
 
-function ImageWithFallback({
-  src,
-  alt,
-  className,
-}: {
-  src: string
-  alt: string
-  className?: string
-}) {
-  const [hasError, setHasError] = useState(false)
-
-  if (!src || hasError) {
-    return (
-      <div className="flex h-60 w-full items-center justify-center bg-[linear-gradient(135deg,#f8fafc,#e2e8f0)] text-center text-sm font-black text-slate-500">
-        Imagen no disponible
-      </div>
-    )
-  }
-
-  return (
-    <img
-      src={src}
-      alt={alt}
-      className={className}
-      onError={() => setHasError(true)}
-    />
-  )
-}
-
 export default function AlbumClient() {
   const [currentUserId, setCurrentUserId] = useState('')
   const [email, setEmail] = useState('')
@@ -195,7 +461,7 @@ export default function AlbumClient() {
         .single<UserRow>()
 
       if (userError || !userRow || !userRow.tenant_id) {
-        console.error('No se pudo resolver el tenant del usuario', userError)
+        console.error('No se pudo resolver el tenant del usuario')
         setLoading(false)
         return
       }
@@ -403,6 +669,22 @@ export default function AlbumClient() {
     }, {})
   }, [stickers])
 
+  const totalRegularStickers = useMemo(
+    () =>
+      stickers.filter((sticker) => {
+        return sticker.selection_id !== introSelection?.id
+      }).length,
+    [stickers, introSelection]
+  )
+
+  const obtainedRegularStickers = useMemo(
+    () =>
+      stickers.filter((sticker) => {
+        return sticker.selection_id !== introSelection?.id && issuedStickerIds.has(sticker.id)
+      }).length,
+    [stickers, introSelection, issuedStickerIds]
+  )
+
   const selectionStats = useMemo<SelectionStat[]>(() => {
     return selections.map((selection) => {
       const isIntroSelection =
@@ -460,6 +742,12 @@ export default function AlbumClient() {
     ? selectionStats.find((stat) => stat.selectionId === currentSelection.id)
     : null
 
+  const currentSelectionTheme = getSelectionTheme(currentSelectionIndex)
+
+  const currentSelectionShield = currentSelection
+    ? getSelectionShield(currentSelection, currentSelectionIndex)
+    : null
+
   const canGoPrev = currentSelectionIndex > 0
   const canGoNext = currentSelectionIndex < selections.length - 1
 
@@ -469,7 +757,7 @@ export default function AlbumClient() {
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-[radial-gradient(circle_at_top,#1d4ed8,#0f172a_42%,#020617)] p-8 text-white">
+      <main className="min-h-screen bg-[radial-gradient(circle_at_top,#008445,#0f172a_42%,#020617)] p-8 text-white">
         Cargando álbum...
       </main>
     )
@@ -477,27 +765,27 @@ export default function AlbumClient() {
 
   if (!currentSelection) {
     return (
-      <main className="min-h-screen bg-[radial-gradient(circle_at_top,#1d4ed8,#0f172a_42%,#020617)] p-8 text-white">
+      <main className="min-h-screen bg-[radial-gradient(circle_at_top,#008445,#0f172a_42%,#020617)] p-8 text-white">
         No hay selecciones disponibles para este álbum.
       </main>
     )
   }
 
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top,#1d4ed8,#0f172a_42%,#020617)]">
+    <main className="min-h-screen bg-[radial-gradient(circle_at_top,#008445,#0f172a_42%,#020617)]">
       <div className="mx-auto max-w-7xl px-4 py-6 md:px-6">
         <div className="grid gap-6 lg:grid-cols-[320px_minmax(0,1fr)]">
           <aside className="lg:sticky lg:top-6 lg:h-[calc(100vh-3rem)]">
-            <div className="flex h-full flex-col overflow-hidden rounded-[28px] border border-cyan-300/20 bg-slate-950/75 shadow-[0_0_0_1px_rgba(255,255,255,0.05),0_20px_60px_rgba(2,8,23,0.6)] backdrop-blur-xl">
-              <div className="relative overflow-hidden border-b border-white/10 bg-[linear-gradient(135deg,rgba(37,99,235,0.95),rgba(15,23,42,0.95)_65%,rgba(6,182,212,0.7))] p-5">
+            <div className="flex h-full flex-col overflow-hidden rounded-[28px] border border-[#008445]/30 bg-slate-950/75 shadow-[0_0_0_1px_rgba(255,255,255,0.05),0_20px_60px_rgba(2,8,23,0.6)] backdrop-blur-xl">
+              <div className="relative overflow-hidden border-b border-white/10 bg-[linear-gradient(135deg,rgba(0,132,69,0.96),rgba(15,23,42,0.95)_65%,rgba(16,185,129,0.72))] p-5">
                 <div className="absolute -right-10 -top-10 h-32 w-32 rounded-full bg-white/10 blur-2xl" />
-                <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-cyan-300/70 to-transparent" />
+                <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-[#008445]/70 to-transparent" />
 
                 <h1 className="relative mt-3 text-3xl font-black tracking-tight text-white">
                   Álbum HSEQ
                 </h1>
 
-                <div className="relative mt-4 space-y-2 text-sm text-blue-50">
+                <div className="relative mt-4 space-y-2 text-sm text-emerald-50">
                   <div className="flex items-center gap-2">
                     <TrophyIcon />
                     <span className="font-semibold">Empresa:</span>
@@ -508,7 +796,7 @@ export default function AlbumClient() {
                     <span className="font-semibold">Usuario:</span>
                     <span className="truncate">{userName || email}</span>
                   </div>
-                  <p className="text-xs text-cyan-100/80">
+                  <p className="text-xs text-emerald-100/80">
                     <span className="font-semibold">Tenant:</span> {tenantId}
                   </p>
                 </div>
@@ -523,7 +811,7 @@ export default function AlbumClient() {
 
                   <div className="h-3 w-full overflow-hidden rounded-full bg-slate-900/60 ring-1 ring-white/10">
                     <div
-                      className="h-full rounded-full bg-[linear-gradient(90deg,#fde047,#38bdf8,#2563eb)] shadow-[0_0_16px_rgba(56,189,248,0.9)] transition-all"
+                      className="h-full rounded-full bg-[linear-gradient(90deg,#fde047,#34d399,#008445)] shadow-[0_0_16px_rgba(0,132,69,0.45)] transition-all"
                       style={{ width: `${progress}%` }}
                     />
                   </div>
@@ -532,7 +820,7 @@ export default function AlbumClient() {
                     <span className="rounded-full border border-yellow-300/50 bg-yellow-300/10 px-2.5 py-1 text-[11px] font-black uppercase tracking-wide text-yellow-200">
                       Colección
                     </span>
-                    <span className="text-xs font-black uppercase tracking-[0.18em] text-cyan-100">
+                    <span className="text-xs font-black uppercase tracking-[0.18em] text-emerald-100">
                       {progress}% completo
                     </span>
                   </div>
@@ -540,7 +828,7 @@ export default function AlbumClient() {
               </div>
 
               <div className="flex-1 overflow-y-auto p-3">
-                <div className="mb-3 flex items-center gap-2 px-2 text-xs font-black uppercase tracking-[0.24em] text-cyan-200/70">
+                <div className="mb-3 flex items-center gap-2 px-2 text-xs font-black uppercase tracking-[0.24em] text-emerald-200/70">
                   <BallIcon />
                   Selecciones
                 </div>
@@ -556,22 +844,22 @@ export default function AlbumClient() {
                         onClick={() => setCurrentSelectionIndex(index)}
                         className={`group w-full rounded-2xl border px-3 py-3 text-left transition-all ${
                           isActive
-                            ? 'border-cyan-300/60 bg-[linear-gradient(135deg,rgba(34,211,238,0.22),rgba(59,130,246,0.18),rgba(255,255,255,0.08))] shadow-[0_0_20px_rgba(34,211,238,0.15)]'
-                            : 'border-white/10 bg-white/[0.04] hover:border-cyan-300/25 hover:bg-white/[0.08]'
+                            ? 'border-[#008445]/60 bg-[linear-gradient(135deg,rgba(0,132,69,0.24),rgba(16,185,129,0.16),rgba(255,255,255,0.08))] shadow-[0_0_20px_rgba(0,132,69,0.18)]'
+                            : 'border-white/10 bg-white/[0.04] hover:border-[#008445]/25 hover:bg-white/[0.08]'
                         }`}
                       >
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
                             <div
                               className={`flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.18em] ${
-                                isActive ? 'text-cyan-200' : 'text-blue-200/60'
+                                isActive ? 'text-emerald-200' : 'text-emerald-200/60'
                               }`}
                             >
                               <ShieldIcon />
                               Selección {selection.number ?? index + 1}
                             </div>
 
-                            <div className={`mt-1 line-clamp-2 text-sm font-black ${isActive ? 'text-white' : 'text-blue-50'}`}>
+                            <div className={`mt-1 line-clamp-2 text-sm font-black ${isActive ? 'text-white' : 'text-emerald-50'}`}>
                               {selection.name}
                             </div>
                           </div>
@@ -580,7 +868,7 @@ export default function AlbumClient() {
                             className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-black ${
                               isActive
                                 ? 'bg-yellow-300 text-slate-950 shadow'
-                                : 'bg-slate-800 text-cyan-100'
+                                : 'bg-slate-800 text-emerald-100'
                             }`}
                           >
                             {stats?.missing ?? 0}
@@ -596,7 +884,7 @@ export default function AlbumClient() {
                             {getSelectionStatusLabel(stats?.status)}
                           </span>
 
-                          <span className="text-[11px] font-bold text-blue-200/75">
+                          <span className="text-[11px] font-bold text-emerald-200/75">
                             {stats?.obtained ?? 0}/{stats?.total ?? 0}
                           </span>
                         </div>
@@ -637,12 +925,25 @@ export default function AlbumClient() {
                 </div>
               ) : null}
 
-              <div className="relative overflow-hidden border-b border-slate-200 bg-[linear-gradient(135deg,#eff6ff,#ffffff_55%,#ecfeff)] p-6">
-                <div className="absolute -right-16 -top-16 h-40 w-40 rounded-full bg-cyan-200/40 blur-3xl" />
+              <div
+                className="relative overflow-hidden border-b border-slate-200 p-6"
+                style={{ background: `linear-gradient(135deg, ${currentSelectionTheme.accentSoft}, #ffffff 55%, ${currentSelectionTheme.accentSoft})` }}
+              >
+                <div
+                  className="absolute -right-16 -top-16 h-40 w-40 rounded-full blur-3xl"
+                  style={{ backgroundColor: `${currentSelectionTheme.accent}33` }}
+                />
 
                 <div className="relative flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-                  <div className="min-w-0">
-                    <div className="inline-flex items-center gap-2 rounded-full bg-[linear-gradient(135deg,#1d4ed8,#06b6d4)] px-3 py-1 text-xs font-black uppercase tracking-[0.2em] text-white shadow">
+                  <div className="min-w-0 xl:flex-1">
+                    <div
+                      className="inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-black uppercase tracking-[0.2em] shadow"
+                      style={{
+                        background: currentSelectionTheme.accentGradient,
+                        color: currentSelectionTheme.accentBadgeText,
+                        boxShadow: currentSelectionTheme.accentShadow,
+                      }}
+                    >
                       <BallIcon />
                       Selección {currentSelection.number ?? currentSelectionIndex + 1} de {selections.length}
                     </div>
@@ -660,7 +961,14 @@ export default function AlbumClient() {
                         {getSelectionStatusLabel(currentSelectionStats?.status)}
                       </span>
 
-                      <span className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-black text-blue-800">
+                      <span
+                        className="rounded-full border px-3 py-1 text-xs font-black"
+                        style={{
+                          borderColor: currentSelectionTheme.accentSoftBorder,
+                          backgroundColor: currentSelectionTheme.accentSoft,
+                          color: currentSelectionTheme.accentPillText,
+                        }}
+                      >
                         Faltantes: {currentSelectionStats?.missing ?? 0}
                       </span>
 
@@ -682,21 +990,53 @@ export default function AlbumClient() {
                     ) : null}
                   </div>
 
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => canGoPrev && setCurrentSelectionIndex((prev) => prev - 1)}
-                      disabled={!canGoPrev}
-                      className="rounded-2xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-black text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      Anterior
-                    </button>
-                    <button
-                      onClick={() => canGoNext && setCurrentSelectionIndex((prev) => prev + 1)}
-                      disabled={!canGoNext}
-                      className="rounded-2xl bg-[linear-gradient(135deg,#2563eb,#06b6d4)] px-4 py-2.5 text-sm font-black text-white shadow-lg transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      Siguiente
-                    </button>
+                  <div className="flex flex-col items-center gap-4 xl:min-w-[240px] xl:items-end">
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => canGoPrev && setCurrentSelectionIndex((prev) => prev - 1)}
+                        disabled={!canGoPrev}
+                        className="rounded-2xl border px-4 py-2.5 text-sm font-black shadow-sm transition disabled:cursor-not-allowed disabled:opacity-50"
+                        style={{
+                          borderColor: currentSelectionTheme.accentSoftBorder,
+                          backgroundColor: '#ffffff',
+                          color: currentSelectionTheme.accent,
+                        }}
+                      >
+                        Anterior
+                      </button>
+                      <button
+                        onClick={() => canGoNext && setCurrentSelectionIndex((prev) => prev + 1)}
+                        disabled={!canGoNext}
+                        className="rounded-2xl px-4 py-2.5 text-sm font-black text-white shadow-lg transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+                        style={{
+                          background: currentSelectionTheme.accentGradient,
+                          color: currentSelectionTheme.accentBadgeText,
+                          boxShadow: currentSelectionTheme.accentShadow,
+                        }}
+                      >
+                        Siguiente
+                      </button>
+                    </div>
+
+                    {!isCurrentIntroSelection && currentSelectionShield ? (
+                      <div
+                        className="relative h-[220px] w-[220px] overflow-hidden rounded-[24px] border p-0 shadow-sm"
+                        style={{
+                          borderColor: '#d4af37',
+                          background: 'linear-gradient(135deg,#fffdf7,#fff8e1,#fffdf7)',
+                          boxShadow:
+                            '0 0 0 2px rgba(212,175,55,0.35), 0 12px 30px rgba(15,23,42,0.18)',
+                        }}
+                      >
+                        <Image
+                          src={currentSelectionShield}
+                          alt={`Escudo de ${currentSelection.name}`}
+                          fill
+                          className="object-cover"
+                          priority
+                        />
+                      </div>
+                    ) : null}
                   </div>
                 </div>
               </div>
@@ -704,10 +1044,22 @@ export default function AlbumClient() {
               <div className="p-6">
                 {isCurrentIntroSelection ? (
                   <div className="space-y-6">
-                    <div className="rounded-[28px] border border-blue-200 bg-[linear-gradient(135deg,#eff6ff,#f8fafc,#ecfeff)] p-5 shadow-sm">
+                    <div
+                      className="rounded-[28px] border p-5 shadow-sm"
+                      style={{
+                        borderColor: currentSelectionTheme.accentSoftBorder,
+                        background: `linear-gradient(135deg, ${currentSelectionTheme.accentSoft}, #f8fafc, ${currentSelectionTheme.accentSoft})`,
+                      }}
+                    >
                       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                         <div className="max-w-3xl">
-                          <div className="inline-flex items-center gap-2 rounded-full bg-blue-600 px-3 py-1 text-xs font-black uppercase tracking-[0.2em] text-white">
+                          <div
+                            className="inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-black uppercase tracking-[0.2em]"
+                            style={{
+                              background: currentSelectionTheme.accentGradient,
+                              color: currentSelectionTheme.accentBadgeText,
+                            }}
+                          >
                             <ShieldIcon />
                             Paso obligatorio
                           </div>
@@ -715,7 +1067,7 @@ export default function AlbumClient() {
                             RETO IA
                           </h3>
                           <p className="mt-2 text-sm leading-6 text-slate-700">
-                            En esta selección no se entregan láminas. Todos los usuarios deben crear una foto ilustrada utilizando un GPT y subirla. Cuando lo hagan, esta selección quedará completada.
+                            En esta selección no se entregan láminas. Todos los usuarios crear una foto ilustrada utilizando un GPT (Chatgpt,Gemini,claudeai entre otros) y subirla, una vez realices esto esta seleccion quedara completada. <span className="font-black"></span>
                           </p>
 
                           <div className="mt-4">
@@ -724,8 +1076,17 @@ export default function AlbumClient() {
                               className={`inline-flex cursor-pointer rounded-2xl px-4 py-2.5 text-sm font-black text-white shadow transition ${
                                 uploadingSelectionId === currentSelection.id
                                   ? 'bg-slate-400'
-                                  : 'bg-[linear-gradient(135deg,#2563eb,#06b6d4)] hover:brightness-110'
+                                  : ''
                               }`}
+                              style={
+                                uploadingSelectionId === currentSelection.id
+                                  ? undefined
+                                  : {
+                                      background: currentSelectionTheme.accentGradient,
+                                      color: currentSelectionTheme.accentBadgeText,
+                                      boxShadow: currentSelectionTheme.accentShadow,
+                                    }
+                              }
                             >
                               {uploadingSelectionId === currentSelection.id ? 'Subiendo...' : 'Subir mi foto'}
                             </label>
@@ -754,6 +1115,7 @@ export default function AlbumClient() {
                           <div className="mt-2 text-lg font-black text-slate-900">
                             {userSelectionPhotos[currentSelection.id]?.photo_url ? 'Completa' : 'Pendiente'}
                           </div>
+                          <div className="mt-3 text-sm text-slate-600"></div>
                         </div>
                       </div>
 
@@ -762,10 +1124,12 @@ export default function AlbumClient() {
                           <div className="mb-2 text-sm font-black uppercase tracking-[0.16em] text-slate-700">
                             Tu foto registrada
                           </div>
-                          <div className="overflow-hidden rounded-[20px] border border-slate-200 bg-white">
-                            <ImageWithFallback
+                          <div className="overflow-hidden rounded-[24px] border border-slate-200 bg-white">
+                            <Image
                               src={userSelectionPhotos[currentSelection.id].photo_url}
                               alt="Foto subida por el usuario"
+                              width={900}
+                              height={650}
                               className="h-auto w-full object-cover"
                             />
                           </div>
@@ -778,6 +1142,9 @@ export default function AlbumClient() {
                         <BallIcon />
                         Premios a entregar
                       </div>
+                      <p className="mb-5 text-sm text-slate-600">
+                        <span className="font-black"></span>
+                      </p>
 
                       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
                         {INTRO_REFERENCE_IMAGES.map((item) => (
@@ -786,22 +1153,23 @@ export default function AlbumClient() {
                             className="overflow-hidden rounded-[24px] border border-slate-200 bg-[linear-gradient(180deg,#ffffff,#f8fafc)] shadow-sm"
                           >
                             <div className="overflow-hidden border-b border-slate-200 bg-white">
-                              <div className="py-2 text-center text-sm font-black text-slate-900">
-                                {item.title}
-                              </div>
-                              <ImageWithFallback
+                              <div className="text-center text-sm font-black text-slate-900">{item.title}</div>
+                              <Image
                                 src={item.src}
                                 alt={item.title}
+                                width={800}
+                                height={600}
                                 className="h-60 w-full object-cover"
                               />
                             </div>
+                            <div className="p-4"></div>
                           </div>
                         ))}
                       </div>
                     </div>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-5">
+                  <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
                     {currentSelectionStickers.map((sticker) => {
                       const isObtained = issuedStickerIds.has(sticker.id)
 
@@ -810,20 +1178,30 @@ export default function AlbumClient() {
                           key={sticker.id}
                           className={`group relative overflow-hidden rounded-[24px] border transition-all ${
                             isObtained
-                              ? 'border-cyan-200 bg-[linear-gradient(180deg,#ffffff,#eff6ff)] shadow-[0_12px_28px_rgba(37,99,235,0.14)]'
+                              ? ''
                               : 'border-slate-200 bg-[linear-gradient(180deg,#f8fafc,#eef2f7)] shadow-sm'
                           }`}
+                          style={
+                            isObtained
+                              ? {
+                                  borderColor: currentSelectionTheme.accentCardBorder,
+                                  background: currentSelectionTheme.accentCard,
+                                  boxShadow: currentSelectionTheme.accentCardShadow,
+                                }
+                              : undefined
+                          }
                         >
                           <div
                             className={`relative flex items-center justify-between px-3 py-2 ${
                               isObtained
-                                ? 'bg-[linear-gradient(135deg,#0ea5e9,#2563eb,#4338ca)] text-white'
+                                ? 'text-white'
                                 : 'bg-[linear-gradient(135deg,#cbd5e1,#e2e8f0)] text-slate-700'
                             }`}
+                            style={isObtained ? { background: currentSelectionTheme.accentGradient, color: currentSelectionTheme.accentBadgeText } : undefined}
                           >
-                            <span className="flex items-center gap-1 text-[11px] font-black uppercase tracking-[0.18em]">
+                            <span className="flex items-center gap-1 text-[9px] font-black uppercase tracking-[0.18em]">
                               <ShieldIcon />
-                              Lámina
+                              {currentSelection.name}
                             </span>
                             <span className="rounded-full bg-white/20 px-2 py-0.5 text-xs font-black">
                               #{sticker.sticker_number}
@@ -831,37 +1209,30 @@ export default function AlbumClient() {
                           </div>
 
                           {isObtained ? (
-                            <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.6),transparent_60%)]" />
+                            <div
+                              className="pointer-events-none absolute inset-x-0 top-0 h-24"
+                              style={{ background: `radial-gradient(circle at top, rgba(255,255,255,0.6), ${currentSelectionTheme.accent}00 60%)` }}
+                            />
                           ) : null}
 
                           <div className="p-3">
-                            <div className="min-h-[44px] text-sm font-black text-slate-900">
-                              {sticker.name}
-                            </div>
-
-                            {sticker.description ? (
-                              <p className="mt-1 min-h-[32px] text-xs font-medium text-slate-600">
-                                {sticker.description}
-                              </p>
-                            ) : (
-                              <div className="mt-1 min-h-[32px]" />
-                            )}
-
-                            <div className="mt-3 overflow-hidden rounded-[18px] border border-slate-200 bg-white">
+                            <div className="overflow-hidden rounded-[18px] border border-slate-200 bg-white">
                               {isObtained ? (
                                 sticker.art_asset_url ? (
-                                  <ImageWithFallback
+                                  <Image
                                     src={sticker.art_asset_url}
                                     alt={sticker.name}
-                                    className="h-auto w-full object-cover"
+                                    width={300}
+                                    height={400}
+                                    className="h-[320px] w-full object-cover"
                                   />
                                 ) : (
-                                  <div className="flex h-48 items-center justify-center text-sm font-semibold text-slate-400">
+                                  <div className="flex h-[320px] items-center justify-center text-sm font-semibold text-slate-400">
                                     Sin imagen
                                   </div>
                                 )
                               ) : (
-                                <div className="relative flex h-56 items-center justify-center bg-[linear-gradient(135deg,#ffffff,#e2e8f0)] text-center text-sm font-black text-slate-400">
+                                <div className="relative flex h-[320px] items-center justify-center bg-[linear-gradient(135deg,#ffffff,#e2e8f0)] text-center text-sm font-black text-slate-400">
                                   <div className="absolute inset-0 opacity-40 [background-image:linear-gradient(45deg,transparent_25%,rgba(148,163,184,0.25)_25%,rgba(148,163,184,0.25)_50%,transparent_50%,transparent_75%,rgba(148,163,184,0.25)_75%)] [background-size:24px_24px]" />
                                   <div className="relative flex flex-col items-center gap-2">
                                     <BallIcon />
@@ -871,13 +1242,23 @@ export default function AlbumClient() {
                               )}
                             </div>
 
+                            <div className="mt-3 min-h-[36px] text-xs font-black leading-snug text-slate-900">
+                              {sticker.name}
+                            </div>
+
+                            {sticker.description ? (
+                              <p className="mt-1 min-h-[28px] text-[11px] font-medium leading-snug text-slate-600"></p>
+                            ) : (
+                              <div className="mt-1 min-h-[28px]" />
+                            )}
+
                             <div className="mt-3">
                               {isObtained ? (
-                                <div className="inline-flex rounded-full border border-yellow-200 bg-[linear-gradient(135deg,#fef9c3,#fde68a)] px-3 py-1 text-xs font-black uppercase tracking-wide text-yellow-900 shadow-sm">
-                                  Brillante
+                                <div className="inline-flex rounded-full border border-yellow-200 bg-[linear-gradient(135deg,#fef9c3,#fde68a)] px-3 py-1 text-[11px] font-black uppercase tracking-wide text-yellow-900 shadow-sm">
+                                  PEGADO
                                 </div>
                               ) : (
-                                <div className="inline-flex rounded-full border border-slate-300 bg-slate-200 px-3 py-1 text-xs font-black uppercase tracking-wide text-slate-600">
+                                <div className="inline-flex rounded-full border border-slate-300 bg-slate-200 px-3 py-1 text-[11px] font-black uppercase tracking-wide text-slate-600">
                                   Pendiente
                                 </div>
                               )}
