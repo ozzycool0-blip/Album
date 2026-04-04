@@ -451,6 +451,7 @@ export default function AlbumClient() {
   const [panelMessage, setPanelMessage] = useState('')
   const [panelFilter, setPanelFilter] = useState<'all'>('all')
   const [savingPlacement, setSavingPlacement] = useState(false)
+  const [isPegadoPanelCollapsed, setIsPegadoPanelCollapsed] = useState(false)
 
   const [userSelectionPhotos, setUserSelectionPhotos] = useState<Record<string, UserSelectionPhoto>>({})
   const [uploadingSelectionId, setUploadingSelectionId] = useState<string | null>(null)
@@ -911,19 +912,19 @@ export default function AlbumClient() {
 
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top,#008445,#0f172a_42%,#020617)]">
-      <div className="mx-auto max-w-7xl px-4 py-6 md:px-6">
-        <div className="grid gap-6 lg:grid-cols-[320px_minmax(0,1fr)]">
-          <aside className="lg:sticky lg:top-6 lg:h-[calc(100vh-3rem)]">
-            <div className="flex h-full flex-col overflow-hidden rounded-[28px] border border-[#008445]/30 bg-slate-950/75 shadow-[0_0_0_1px_rgba(255,255,255,0.05),0_20px_60px_rgba(2,8,23,0.6)] backdrop-blur-xl">
-              <div className="relative overflow-hidden border-b border-white/10 bg-[linear-gradient(135deg,rgba(0,132,69,0.96),rgba(15,23,42,0.95)_65%,rgba(16,185,129,0.72))] p-5">
+      <div className="mx-auto max-w-[1700px] px-4 py-6 md:px-6">
+        <div className="grid gap-5 xl:grid-cols-[290px_minmax(0,1fr)]">
+          <aside className="xl:sticky xl:top-5 xl:h-[calc(100vh-2.5rem)]">
+            <div className="flex h-full flex-col overflow-hidden rounded-[24px] border border-[#008445]/30 bg-slate-950/75 shadow-[0_0_0_1px_rgba(255,255,255,0.05),0_20px_60px_rgba(2,8,23,0.6)] backdrop-blur-xl">
+              <div className="relative overflow-hidden border-b border-white/10 bg-[linear-gradient(135deg,rgba(0,132,69,0.96),rgba(15,23,42,0.95)_65%,rgba(16,185,129,0.72))] p-4">
                 <div className="absolute -right-10 -top-10 h-32 w-32 rounded-full bg-white/10 blur-2xl" />
                 <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-[#008445]/70 to-transparent" />
 
-                <h1 className="relative mt-3 text-3xl font-black tracking-tight text-white">
+                <h1 className="relative mt-2 text-[2rem] font-black tracking-tight text-white">
                   Álbum HSEQ
                 </h1>
 
-                <div className="relative mt-4 space-y-2 text-sm text-emerald-50">
+                <div className="relative mt-3 space-y-2 text-[13px] text-emerald-50">
                   <div className="flex items-center gap-2">
                     <TrophyIcon />
                     <span className="font-semibold">Empresa:</span>
@@ -939,7 +940,7 @@ export default function AlbumClient() {
                   </p>
                 </div>
 
-                <div className="relative mt-4 rounded-2xl border border-white/15 bg-white/10 p-4 shadow-inner">
+                <div className="relative mt-3 rounded-2xl border border-white/15 bg-white/10 p-3.5 shadow-inner">
                   <div className="mb-2 flex items-center justify-between text-sm font-bold text-white">
                     <span>Progreso del álbum</span>
                     <span>
@@ -965,13 +966,13 @@ export default function AlbumClient() {
                 </div>
               </div>
 
-              <div className="flex-1 overflow-y-auto p-3">
+              <div className="flex-1 overflow-y-auto p-2.5">
                 <div className="mb-3 flex items-center gap-2 px-2 text-xs font-black uppercase tracking-[0.24em] text-emerald-200/70">
                   <BallIcon />
                   Selecciones
                 </div>
 
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   {selections.map((selection, index) => {
                     const isActive = index === currentSelectionIndex
                     const stats = selectionStats.find((s) => s.selectionId === selection.id)
@@ -980,7 +981,7 @@ export default function AlbumClient() {
                       <button
                         key={selection.id}
                         onClick={() => setCurrentSelectionIndex(index)}
-                        className={`group w-full rounded-2xl border px-3 py-3 text-left transition-all ${
+                        className={`group w-full rounded-2xl border px-3 py-2.5 text-left transition-all ${
                           isActive
                             ? 'border-[#008445]/60 bg-[linear-gradient(135deg,rgba(0,132,69,0.24),rgba(16,185,129,0.16),rgba(255,255,255,0.08))] shadow-[0_0_20px_rgba(0,132,69,0.18)]'
                             : 'border-white/10 bg-white/[0.04] hover:border-[#008445]/25 hover:bg-white/[0.08]'
@@ -997,7 +998,7 @@ export default function AlbumClient() {
                               Selección {selection.number ?? index + 1}
                             </div>
 
-                            <div className={`mt-1 line-clamp-2 text-sm font-black ${isActive ? 'text-white' : 'text-emerald-50'}`}>
+                            <div className={`mt-1 line-clamp-2 text-[13px] font-black ${isActive ? 'text-white' : 'text-emerald-50'}`}>
                               {selection.name}
                             </div>
                           </div>
@@ -1013,7 +1014,7 @@ export default function AlbumClient() {
                           </div>
                         </div>
 
-                        <div className="mt-3 flex items-center justify-between gap-2">
+                        <div className="mt-2.5 flex items-center justify-between gap-2">
                           <span
                             className={`rounded-full px-2.5 py-1 text-[11px] font-black ${getSelectionStatusBadge(
                               stats?.status
@@ -1035,16 +1036,16 @@ export default function AlbumClient() {
           </aside>
 
           <section className="min-w-0">
-            <div className="space-y-4">
-              <div className="sticky top-3 z-30 overflow-hidden rounded-[30px] border border-white/15 bg-slate-950/85 shadow-[0_18px_40px_rgba(2,8,23,0.45)] backdrop-blur-xl">
-                <div className="border-b border-white/10 bg-[linear-gradient(135deg,rgba(2,132,199,0.22),rgba(15,23,42,0.9),rgba(8,145,178,0.22))] p-4">
+            <div className="space-y-3">
+              <div className="sticky top-3 z-30 overflow-hidden rounded-[24px] border border-white/15 bg-slate-950/85 shadow-[0_18px_40px_rgba(2,8,23,0.45)] backdrop-blur-xl">
+                <div className="border-b border-white/10 bg-[linear-gradient(135deg,rgba(2,132,199,0.22),rgba(15,23,42,0.9),rgba(8,145,178,0.22))] px-4 py-3.5">
                   <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
                     <div>
                       <div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.22em] text-cyan-200">
                         <DragIcon />
                         Panel de láminas por pegar
                       </div>
-                      <h2 className="mt-2 text-xl font-black text-white">
+                      <h2 className="mt-1.5 text-lg font-black text-white">
                         Arrastra la lámina y suéltala sobre el espacio correcto
                       </h2>
                     </div>
@@ -1053,13 +1054,20 @@ export default function AlbumClient() {
                       <button
                         type="button"
                         onClick={() => setPanelFilter('all')}
-                        className={`rounded-full px-3 py-1.5 text-xs font-black uppercase tracking-wide transition ${
+                        className={`rounded-full px-3 py-1.5 text-[11px] font-black uppercase tracking-wide transition ${
                           panelFilter === 'all'
                             ? 'bg-cyan-300 text-slate-950 shadow'
                             : 'border border-white/15 bg-white/5 text-white'
                         }`}
                       >
                         Pendiente por pegar ({pendingIssuedStickers.length})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setIsPegadoPanelCollapsed((prev) => !prev)}
+                        className="rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-[11px] font-black uppercase tracking-wide text-white transition hover:bg-white/10"
+                      >
+                        {isPegadoPanelCollapsed ? 'Expandir panel' : 'Ocultar panel'}
                       </button>
                     </div>
                   </div>
@@ -1079,63 +1087,83 @@ export default function AlbumClient() {
                   ) : null}
                 </div>
 
-                <div className="relative">
-                  <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-8 bg-gradient-to-r from-slate-950/90 to-transparent" />
-                  <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-8 bg-gradient-to-l from-slate-950/90 to-transparent" />
-
-                  <div className="overflow-x-auto px-4 py-4">
-                    <div className="flex min-w-max gap-3 pr-10">
-                      {visiblePendingStickers.length > 0 ? (
-                        visiblePendingStickers.map((sticker) => {
-                          const isDragging = draggedStickerId === sticker.id
-                          return (
-                            <div
-                              key={sticker.id}
-                              draggable
-                              onDragStart={(event) => handlePanelDragStart(event, sticker.id)}
-                              onDragEnd={handlePanelDragEnd}
-                              className={`group relative w-[118px] shrink-0 cursor-grab overflow-hidden rounded-[22px] border transition-all active:cursor-grabbing ${
-                                isDragging
-                                  ? 'scale-[1.03] border-cyan-300 bg-cyan-50 shadow-[0_18px_36px_rgba(34,211,238,0.28)] opacity-70'
-                                  : 'border-white/10 bg-[linear-gradient(180deg,#ffffff,#ecfeff)] shadow-[0_10px_26px_rgba(15,23,42,0.2)] hover:-translate-y-1 hover:shadow-[0_14px_30px_rgba(15,23,42,0.24)]'
-                              }`}
-                            >
-                              <div className="flex items-center justify-between bg-[linear-gradient(135deg,#0f172a,#164e63)] px-3 py-2 text-[10px] font-black uppercase tracking-[0.14em] text-cyan-100">
-                                <span className="line-clamp-1">
-                                  {selections.find((item) => item.id === sticker.selection_id)?.name ?? 'Selección'}
-                                </span>
-                                <DragIcon />
-                              </div>
-
-                              <div className="relative h-[140px] overflow-hidden bg-white">
-                                {sticker.art_asset_url ? (
-                                  <Image
-                                    src={sticker.art_asset_url}
-                                    alt={sticker.name}
-                                    fill
-                                    className="object-cover"
-                                  />
-                                ) : (
-                                  <div className="flex h-full items-center justify-center text-center text-xs font-black text-slate-400">
-                                    Sin imagen
-                                  </div>
-                                )}
-                              </div>
-
-                            </div>
-                          )
-                        })
-                      ) : (
-                        <div className="flex h-[180px] min-w-full items-center justify-center rounded-[24px] border border-dashed border-white/15 bg-white/[0.04] px-6 text-center text-sm font-semibold text-slate-300">
-                          No hay láminas pendientes en este filtro. Cuando el administrador entregue nuevas, aparecerán aquí.
+                {isPegadoPanelCollapsed ? (
+                  <div className="border-t border-white/10 px-4 py-3">
+                    <div className="flex items-center justify-between gap-3 rounded-[18px] border border-white/10 bg-white/[0.04] px-4 py-3">
+                      <div>
+                        <div className="text-sm font-black text-white">Panel de pegado oculto</div>
+                        <div className="text-xs font-medium text-slate-300">
+                          Tienes {pendingIssuedStickers.length} láminas pendientes por pegar.
                         </div>
-                      )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setIsPegadoPanelCollapsed(false)}
+                        className="rounded-full bg-cyan-300 px-3 py-1.5 text-[11px] font-black uppercase tracking-wide text-slate-950 shadow"
+                      >
+                        Ver láminas
+                      </button>
                     </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="relative">
+                    <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-8 bg-gradient-to-r from-slate-950/90 to-transparent" />
+                    <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-8 bg-gradient-to-l from-slate-950/90 to-transparent" />
+
+                    <div className="overflow-x-auto px-3 py-3">
+                      <div className="flex min-w-max gap-2.5 pr-8">
+                        {visiblePendingStickers.length > 0 ? (
+                          visiblePendingStickers.map((sticker) => {
+                            const isDragging = draggedStickerId === sticker.id
+                            return (
+                              <div
+                                key={sticker.id}
+                                draggable
+                                onDragStart={(event) => handlePanelDragStart(event, sticker.id)}
+                                onDragEnd={handlePanelDragEnd}
+                                className={`group relative w-[132px] shrink-0 cursor-grab overflow-hidden rounded-[22px] border transition-all active:cursor-grabbing ${
+                                  isDragging
+                                    ? 'scale-[1.03] border-cyan-300 bg-cyan-50 shadow-[0_18px_36px_rgba(34,211,238,0.28)] opacity-70'
+                                    : 'border-white/10 bg-[linear-gradient(180deg,#ffffff,#ecfeff)] shadow-[0_10px_26px_rgba(15,23,42,0.2)] hover:-translate-y-1 hover:shadow-[0_14px_30px_rgba(15,23,42,0.24)]'
+                                }`}
+                              >
+                                <div className="flex items-center justify-between bg-[linear-gradient(135deg,#0f172a,#164e63)] px-3 py-2 text-[9px] font-black uppercase tracking-[0.14em] text-cyan-100">
+                                  <span className="line-clamp-1">
+                                    {selections.find((item) => item.id === sticker.selection_id)?.name ?? 'Selección'}
+                                  </span>
+                                  <DragIcon />
+                                </div>
+
+                                <div className="relative h-[152px] overflow-hidden bg-white">
+                                  {sticker.art_asset_url ? (
+                                    <Image
+                                      src={sticker.art_asset_url}
+                                      alt={sticker.name}
+                                      fill
+                                      className="object-cover"
+                                    />
+                                  ) : (
+                                    <div className="flex h-full items-center justify-center text-center text-xs font-black text-slate-400">
+                                      Sin imagen
+                                    </div>
+                                  )}
+                                </div>
+
+                              </div>
+                            )
+                          })
+                        ) : (
+                          <div className="flex h-[170px] min-w-full items-center justify-center rounded-[20px] border border-dashed border-white/15 bg-white/[0.04] px-6 text-center text-sm font-semibold text-slate-300">
+                            No hay láminas pendientes en este filtro. Cuando el administrador entregue nuevas, aparecerán aquí.
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
-              <div className="overflow-hidden rounded-[30px] border border-white/10 bg-white/95 shadow-[0_12px_40px_rgba(15,23,42,0.35)]">
+              <div className="overflow-hidden rounded-[24px] border border-white/10 bg-white/95 shadow-[0_12px_40px_rgba(15,23,42,0.35)]">
                 {progress === 100 ? (
                   <div className="border-b border-emerald-200 bg-[linear-gradient(90deg,#ecfdf5,#dcfce7,#ecfeff)] p-5">
                     <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -1164,7 +1192,7 @@ export default function AlbumClient() {
                 ) : null}
 
                 <div
-                  className="relative overflow-hidden border-b border-slate-200 p-6"
+                  className="relative overflow-hidden border-b border-slate-200 px-5 py-4"
                   style={{ background: `linear-gradient(135deg, ${currentSelectionTheme.accentSoft}, #ffffff 55%, ${currentSelectionTheme.accentSoft})` }}
                 >
                   <div
@@ -1172,7 +1200,7 @@ export default function AlbumClient() {
                     style={{ backgroundColor: `${currentSelectionTheme.accent}33` }}
                   />
 
-                  <div className="relative flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                  <div className="relative flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                     <div className="min-w-0 xl:flex-1">
                       <div
                         className="inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-black uppercase tracking-[0.2em] shadow"
@@ -1186,11 +1214,11 @@ export default function AlbumClient() {
                         Selección {currentSelection.number ?? currentSelectionIndex + 1} de {selections.length}
                       </div>
 
-                      <h2 className="mt-3 text-3xl font-black tracking-tight text-slate-900">
+                      <h2 className="mt-2.5 text-[2.25rem] font-black tracking-tight leading-tight text-slate-900">
                         {currentSelection.name}
                       </h2>
 
-                      <div className="mt-3 flex flex-wrap gap-2">
+                      <div className="mt-2.5 flex flex-wrap gap-2">
                         <span
                           className={`rounded-full px-3 py-1 text-xs font-black ${getSelectionStatusBadge(
                             currentSelectionStats?.status
@@ -1216,19 +1244,19 @@ export default function AlbumClient() {
                       </div>
 
                       {currentSelection.description ? (
-                        <p className="mt-4 text-sm font-semibold text-slate-500">
+                        <p className="mt-3 text-[13px] font-semibold text-slate-500">
                           {currentSelection.description}
                         </p>
                       ) : null}
 
                       {currentSelection.introduccion ? (
-                        <p className="mt-4 max-w-4xl text-base leading-7 text-slate-700">
+                        <p className="mt-3 max-w-4xl text-[15px] leading-6 text-slate-700">
                           {currentSelection.introduccion}
                         </p>
                       ) : null}
                     </div>
 
-                    <div className="flex flex-col items-center gap-4 xl:min-w-[240px] xl:items-end">
+                    <div className="flex flex-col items-center gap-3 lg:min-w-[220px] lg:items-end">
                       <div className="flex gap-2">
                         <button
                           onClick={() => canGoPrev && setCurrentSelectionIndex((prev) => prev - 1)}
@@ -1258,7 +1286,7 @@ export default function AlbumClient() {
 
                       {!isCurrentIntroSelection && currentSelectionShield ? (
                         <div
-                          className="relative h-[220px] w-[220px] overflow-hidden rounded-[24px] border p-0 shadow-sm"
+                          className="relative h-[190px] w-[190px] overflow-hidden rounded-[22px] border p-0 shadow-sm"
                           style={{
                             borderColor: '#d4af37',
                             background: 'linear-gradient(135deg,#fffdf7,#fff8e1,#fffdf7)',
@@ -1279,7 +1307,7 @@ export default function AlbumClient() {
                   </div>
                 </div>
 
-                <div className="p-6">
+                <div className="p-4 lg:p-5">
                   {isCurrentIntroSelection ? (
                     <div className="space-y-6">
                       <div
@@ -1403,7 +1431,7 @@ export default function AlbumClient() {
                       </div>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                       {currentSelectionStickers.map((sticker) => {
                         const isPlaced = placedStickerIds.has(sticker.id)
                         const isHovering = hoveredStickerId === sticker.id
@@ -1416,7 +1444,7 @@ export default function AlbumClient() {
                             onDragOver={(event) => !isPlaced && handleCardDragOver(event, sticker)}
                             onDragLeave={() => handleCardDragLeave(sticker.id)}
                             onDrop={(event) => !isPlaced && handleCardDrop(event, sticker)}
-                            className={`group relative overflow-hidden rounded-[24px] border transition-all ${
+                            className={`group relative overflow-hidden rounded-[20px] border transition-all ${
                               isPlaced
                                 ? ''
                                 : 'border-slate-200 bg-[linear-gradient(180deg,#f8fafc,#eef2f7)] shadow-sm'
@@ -1445,7 +1473,7 @@ export default function AlbumClient() {
                               }`}
                               style={isPlaced ? { background: currentSelectionTheme.accentGradient, color: currentSelectionTheme.accentBadgeText } : undefined}
                             >
-                              <span className="flex items-center gap-1 text-[9px] font-black uppercase tracking-[0.18em]">
+                              <span className="flex items-center gap-1 text-[8px] font-black uppercase tracking-[0.16em]">
                                 <ShieldIcon />
                                 {currentSelection.name}
                               </span>
@@ -1479,7 +1507,7 @@ export default function AlbumClient() {
                               </div>
                             ) : null}
 
-                            <div className="p-3">
+                            <div className="p-2.5">
                               <div className="overflow-hidden rounded-[18px] border border-slate-200 bg-white">
                                 {isPlaced ? (
                                   sticker.art_asset_url ? (
@@ -1488,15 +1516,15 @@ export default function AlbumClient() {
                                       alt={sticker.name}
                                       width={300}
                                       height={400}
-                                      className="h-[320px] w-full object-cover"
+                                      className="h-[280px] w-full object-cover"
                                     />
                                   ) : (
-                                    <div className="flex h-[320px] items-center justify-center text-sm font-semibold text-slate-400">
+                                    <div className="flex h-[280px] items-center justify-center text-sm font-semibold text-slate-400">
                                       Sin imagen
                                     </div>
                                   )
                                 ) : (
-                                  <div className="relative flex h-[320px] items-center justify-center bg-[linear-gradient(135deg,#ffffff,#e2e8f0)] text-center text-sm font-black text-slate-400">
+                                  <div className="relative flex h-[280px] items-center justify-center bg-[linear-gradient(135deg,#ffffff,#e2e8f0)] text-center text-sm font-black text-slate-400">
                                     <div className="absolute inset-0 opacity-40 [background-image:linear-gradient(45deg,transparent_25%,rgba(148,163,184,0.25)_25%,rgba(148,163,184,0.25)_50%,transparent_50%,transparent_75%,rgba(148,163,184,0.25)_75%)] [background-size:24px_24px]" />
                                     <div className="relative flex flex-col items-center gap-2">
                                       <BallIcon />
@@ -1506,7 +1534,7 @@ export default function AlbumClient() {
                                 )}
                               </div>
 
-                              <div className="mt-3 min-h-[36px] text-xs font-black leading-snug text-slate-900">
+                              <div className="mt-2.5 min-h-[34px] text-[12px] font-black leading-snug text-slate-900">
                                 {sticker.name}
                               </div>
 
@@ -1518,22 +1546,22 @@ export default function AlbumClient() {
                                 <div className="mt-1 min-h-[28px]" />
                               )}
 
-                              <div className="mt-3 flex flex-wrap items-center gap-2">
+                              <div className="mt-2.5 flex flex-wrap items-center gap-2">
                                 {isPlaced ? (
                                   <>
-                                    <div className="inline-flex rounded-full border border-yellow-200 bg-[linear-gradient(135deg,#fef9c3,#fde68a)] px-3 py-1 text-[11px] font-black uppercase tracking-wide text-yellow-900 shadow-sm">
+                                    <div className="inline-flex rounded-full border border-yellow-200 bg-[linear-gradient(135deg,#fef9c3,#fde68a)] px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-yellow-900 shadow-sm">
                                       PEGADO
                                     </div>
                                     <button
                                       type="button"
                                       onClick={() => handleReturnStickerToPanel(sticker.id)}
-                                      className="inline-flex rounded-full border border-slate-300 bg-white px-3 py-1 text-[11px] font-black uppercase tracking-wide text-slate-700 transition hover:bg-slate-50"
+                                      className="inline-flex rounded-full border border-slate-300 bg-white px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-slate-700 transition hover:bg-slate-50"
                                     >
                                       Devolver al panel
                                     </button>
                                   </>
                                 ) : (
-                                  <div className="inline-flex rounded-full border border-slate-300 bg-slate-200 px-3 py-1 text-[11px] font-black uppercase tracking-wide text-slate-600">
+                                  <div className="inline-flex rounded-full border border-slate-300 bg-slate-200 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-slate-600">
                                     Pendiente
                                   </div>
                                 )}
