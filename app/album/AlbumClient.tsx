@@ -1,6 +1,7 @@
+
 'use client'
 
-import { ChangeEvent, useEffect, useMemo, useState } from 'react'
+import { ChangeEvent, DragEvent, useEffect, useMemo, useState } from 'react'
 import Image from 'next/image'
 import { supabase } from '@/lib/supabase/client'
 
@@ -44,6 +45,16 @@ type IssuedSticker = {
   sticker_id: string
 }
 
+type UserStickerPlacement = {
+  id: string
+  user_id: string
+  sticker_id: string
+  selection_id: string
+  tenant_id: string
+  created_at?: string | null
+  updated_at?: string | null
+}
+
 type SelectionStat = {
   selectionId: string
   total: number
@@ -68,7 +79,6 @@ type IntroReferenceImage = {
   title: string
   description?: string
 }
-
 
 type SelectionTheme = {
   accent: string
@@ -357,20 +367,12 @@ const INTRO_SELECTION_ORDER = 0
 const INTRO_SELECTION_NAME = 'Indicaciones de llenado'
 const USER_PHOTOS_TABLE = 'user_selection_photos'
 const UPLOAD_BUCKET = 'album-uploads'
+const USER_STICKER_PLACEMENTS_TABLE = 'user_sticker_placements'
 
 const INTRO_REFERENCE_IMAGES: IntroReferenceImage[] = [
-  {
-    src: '/stickers/premio1.png',
-    title: 'Premio # 1',
-  },
-  {
-    src: '/stickers/premio2.png',
-    title: 'Premio # 2',
-  },
-  {
-    src: '/stickers/premio3.png',
-    title: 'Premio # 3',
-  },
+  { src: '/stickers/premio1.png', title: 'Premio # 1' },
+  { src: '/stickers/premio2.png', title: 'Premio # 2' },
+  { src: '/stickers/premio3.png', title: 'Premio # 3' },
 ]
 
 function getSelectionStatusBadge(status?: SelectionStat['status']) {
@@ -423,6 +425,14 @@ function BallIcon() {
   )
 }
 
+function DragIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="currentColor" aria-hidden="true">
+      <path d="M8 5a2 2 0 1 1 0 4 2 2 0 0 1 0-4Zm8 0a2 2 0 1 1 0 4 2 2 0 0 1 0-4ZM8 11a2 2 0 1 1 0 4 2 2 0 0 1 0-4Zm8 0a2 2 0 1 1 0 4 2 2 0 0 1 0-4ZM8 17a2 2 0 1 1 0 4 2 2 0 0 1 0-4Zm8 0a2 2 0 1 1 0 4 2 2 0 0 1 0-4Z" />
+    </svg>
+  )
+}
+
 export default function AlbumClient() {
   const [currentUserId, setCurrentUserId] = useState('')
   const [email, setEmail] = useState('')
@@ -431,10 +441,16 @@ export default function AlbumClient() {
   const [selections, setSelections] = useState<Selection[]>([])
   const [stickers, setStickers] = useState<Sticker[]>([])
   const [issued, setIssued] = useState<IssuedSticker[]>([])
+  const [placements, setPlacements] = useState<UserStickerPlacement[]>([])
   const [tenantId, setTenantId] = useState('')
   const [loading, setLoading] = useState(true)
   const [rewardMessage, setRewardMessage] = useState('')
   const [currentSelectionIndex, setCurrentSelectionIndex] = useState(0)
+  const [draggedStickerId, setDraggedStickerId] = useState<string | null>(null)
+  const [hoveredStickerId, setHoveredStickerId] = useState<string | null>(null)
+  const [panelMessage, setPanelMessage] = useState('')
+  const [panelFilter, setPanelFilter] = useState<'all'>('all')
+  const [savingPlacement, setSavingPlacement] = useState(false)
 
   const [userSelectionPhotos, setUserSelectionPhotos] = useState<Record<string, UserSelectionPhoto>>({})
   const [uploadingSelectionId, setUploadingSelectionId] = useState<string | null>(null)
@@ -495,6 +511,12 @@ export default function AlbumClient() {
         .select('id, user_id, sticker_id')
         .eq('user_id', user.id)
 
+      const { data: placementsData, error: placementsError } = await supabase
+        .from(USER_STICKER_PLACEMENTS_TABLE)
+        .select('id, user_id, sticker_id, selection_id, tenant_id, created_at, updated_at')
+        .eq('user_id', user.id)
+        .eq('tenant_id', userRow.tenant_id)
+
       const { data: userSelectionPhotosData, error: userSelectionPhotosError } = await supabase
         .from(USER_PHOTOS_TABLE)
         .select('id, user_id, selection_id, tenant_id, photo_url, status, created_at, updated_at')
@@ -504,6 +526,7 @@ export default function AlbumClient() {
       if (selectionsError) console.error('Error cargando selecciones:', selectionsError)
       if (stickersError) console.error('Error cargando stickers:', stickersError)
       if (issuedError) console.error('Error cargando stickers emitidos:', issuedError)
+      if (placementsError) console.error('Error cargando pegados:', placementsError)
       if (userSelectionPhotosError) {
         console.error(`Error cargando fotos del usuario desde ${USER_PHOTOS_TABLE}:`, userSelectionPhotosError)
       }
@@ -511,6 +534,7 @@ export default function AlbumClient() {
       setSelections((selectionsData as Selection[]) || [])
       setStickers((stickersData as Sticker[]) || [])
       setIssued((issuedData as IssuedSticker[]) || [])
+      setPlacements((placementsData as UserStickerPlacement[]) || [])
 
       const safeUserSelectionPhotos = (userSelectionPhotosData as UserSelectionPhoto[]) || []
       const photoMap = safeUserSelectionPhotos.reduce<Record<string, UserSelectionPhoto>>((acc, item) => {
@@ -650,6 +674,7 @@ export default function AlbumClient() {
   }
 
   const issuedStickerIds = useMemo(() => new Set(issued.map((i) => i.sticker_id)), [issued])
+  const placedStickerIds = useMemo(() => new Set(placements.map((item) => item.sticker_id)), [placements])
 
   const introSelection = useMemo(
     () =>
@@ -669,6 +694,13 @@ export default function AlbumClient() {
     }, {})
   }, [stickers])
 
+  const stickersById = useMemo(() => {
+    return stickers.reduce<Record<string, Sticker>>((acc, sticker) => {
+      acc[sticker.id] = sticker
+      return acc
+    }, {})
+  }, [stickers])
+
   const totalRegularStickers = useMemo(
     () =>
       stickers.filter((sticker) => {
@@ -677,12 +709,12 @@ export default function AlbumClient() {
     [stickers, introSelection]
   )
 
-  const obtainedRegularStickers = useMemo(
+  const placedRegularStickers = useMemo(
     () =>
       stickers.filter((sticker) => {
-        return sticker.selection_id !== introSelection?.id && issuedStickerIds.has(sticker.id)
+        return sticker.selection_id !== introSelection?.id && placedStickerIds.has(sticker.id)
       }).length,
-    [stickers, introSelection, issuedStickerIds]
+    [stickers, introSelection, placedStickerIds]
   )
 
   const selectionStats = useMemo<SelectionStat[]>(() => {
@@ -705,7 +737,7 @@ export default function AlbumClient() {
 
       const selectionStickers = stickersBySelection[selection.id] || []
       const total = selectionStickers.length
-      const obtainedCount = selectionStickers.filter((s) => issuedStickerIds.has(s.id)).length
+      const obtainedCount = selectionStickers.filter((s) => placedStickerIds.has(s.id)).length
       const missing = total - obtainedCount
       const status: SelectionStat['status'] =
         total === 0
@@ -724,7 +756,7 @@ export default function AlbumClient() {
         status,
       }
     })
-  }, [selections, stickersBySelection, issuedStickerIds, introSelection, userSelectionPhotos])
+  }, [selections, stickersBySelection, placedStickerIds, introSelection, userSelectionPhotos])
 
   const currentSelection = selections[currentSelectionIndex] ?? null
   const isCurrentIntroSelection =
@@ -754,6 +786,112 @@ export default function AlbumClient() {
   const totalSections = selections.length
   const completedSections = selectionStats.filter((item) => item.status === 'completa').length
   const progress = totalSections > 0 ? Math.round((completedSections / totalSections) * 100) : 0
+
+  const pendingIssuedStickers = useMemo(() => {
+    return stickers.filter((sticker) => issuedStickerIds.has(sticker.id) && !placedStickerIds.has(sticker.id))
+  }, [stickers, issuedStickerIds, placedStickerIds])
+
+  const visiblePendingStickers = useMemo(() => {
+    return pendingIssuedStickers
+  }, [pendingIssuedStickers])
+
+  const draggedSticker = draggedStickerId ? stickersById[draggedStickerId] ?? null : null
+
+  async function placeSticker(stickerId: string, targetSticker: Sticker) {
+    if (!currentUserId || !tenantId) return
+    const dragged = stickersById[stickerId]
+
+    if (!dragged) return
+
+    if (placedStickerIds.has(stickerId)) {
+      setPanelMessage('Esta lámina ya estaba pegada.')
+      return
+    }
+
+    if (dragged.id !== targetSticker.id) {
+      setPanelMessage(`La lámina #${dragged.sticker_number} no corresponde a este espacio. Volvió al panel.`)
+      return
+    }
+
+    try {
+      setSavingPlacement(true)
+
+      const { data, error } = await supabase
+        .from(USER_STICKER_PLACEMENTS_TABLE)
+        .insert({
+          user_id: currentUserId,
+          tenant_id: tenantId,
+          sticker_id: dragged.id,
+          selection_id: dragged.selection_id,
+        })
+        .select('id, user_id, sticker_id, selection_id, tenant_id, created_at, updated_at')
+        .single<UserStickerPlacement>()
+
+      if (error) throw error
+
+      setPlacements((prev) => [...prev, data])
+      setPanelMessage(`¡Perfecto! La lámina #${dragged.sticker_number} quedó pegada.`)
+    } catch (error) {
+      console.error('Error pegando lámina:', error)
+      setPanelMessage('No fue posible pegar la lámina. Revisa la tabla user_sticker_placements.')
+    } finally {
+      setSavingPlacement(false)
+      setDraggedStickerId(null)
+      setHoveredStickerId(null)
+    }
+  }
+
+  async function handleReturnStickerToPanel(stickerId: string) {
+    try {
+      const placementToDelete = placements.find((item) => item.sticker_id === stickerId)
+
+      if (!placementToDelete) return
+
+      const { error } = await supabase
+        .from(USER_STICKER_PLACEMENTS_TABLE)
+        .delete()
+        .eq('id', placementToDelete.id)
+
+      if (error) throw error
+
+      setPlacements((prev) => prev.filter((item) => item.id !== placementToDelete.id))
+      setPanelMessage('La lámina volvió al panel de pegado.')
+    } catch (error) {
+      console.error('Error devolviendo lámina al panel:', error)
+      setPanelMessage('No fue posible devolver la lámina al panel.')
+    }
+  }
+
+  function handlePanelDragStart(event: DragEvent<HTMLDivElement>, stickerId: string) {
+    event.dataTransfer.effectAllowed = 'move'
+    event.dataTransfer.setData('text/plain', stickerId)
+    setDraggedStickerId(stickerId)
+    setPanelMessage('Arrastra la lámina al espacio correcto del álbum.')
+  }
+
+  function handlePanelDragEnd() {
+    setDraggedStickerId(null)
+    setHoveredStickerId(null)
+  }
+
+  function handleCardDragOver(event: DragEvent<HTMLDivElement>, sticker: Sticker) {
+    event.preventDefault()
+    event.dataTransfer.dropEffect = draggedStickerId && draggedStickerId === sticker.id ? 'move' : 'none'
+    setHoveredStickerId(sticker.id)
+  }
+
+  function handleCardDragLeave(stickerId: string) {
+    if (hoveredStickerId === stickerId) {
+      setHoveredStickerId(null)
+    }
+  }
+
+  async function handleCardDrop(event: DragEvent<HTMLDivElement>, sticker: Sticker) {
+    event.preventDefault()
+    const droppedStickerId = event.dataTransfer.getData('text/plain') || draggedStickerId
+    if (!droppedStickerId) return
+    await placeSticker(droppedStickerId, sticker)
+  }
 
   if (loading) {
     return (
@@ -897,378 +1035,516 @@ export default function AlbumClient() {
           </aside>
 
           <section className="min-w-0">
-            <div className="overflow-hidden rounded-[30px] border border-white/10 bg-white/95 shadow-[0_12px_40px_rgba(15,23,42,0.35)]">
-              {progress === 100 ? (
-                <div className="border-b border-emerald-200 bg-[linear-gradient(90deg,#ecfdf5,#dcfce7,#ecfeff)] p-5">
-                  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div className="space-y-4">
+              <div className="sticky top-3 z-30 overflow-hidden rounded-[30px] border border-white/15 bg-slate-950/85 shadow-[0_18px_40px_rgba(2,8,23,0.45)] backdrop-blur-xl">
+                <div className="border-b border-white/10 bg-[linear-gradient(135deg,rgba(2,132,199,0.22),rgba(15,23,42,0.9),rgba(8,145,178,0.22))] p-4">
+                  <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
                     <div>
-                      <h2 className="flex items-center gap-2 text-xl font-black text-emerald-800">
-                        <TrophyIcon />
-                        ¡Álbum completado!
+                      <div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.22em] text-cyan-200">
+                        <DragIcon />
+                        Panel de láminas por pegar
+                      </div>
+                      <h2 className="mt-2 text-xl font-black text-white">
+                        Arrastra la lámina y suéltala sobre el espacio correcto
                       </h2>
-                      <p className="mt-1 text-sm font-medium text-emerald-700">
-                        Ya puedes reclamar tu medalla virtual.
-                      </p>
                     </div>
 
-                    <button
-                      onClick={handleClaimReward}
-                      className="rounded-2xl bg-[linear-gradient(135deg,#16a34a,#059669)] px-4 py-2.5 text-sm font-black text-white shadow-lg transition hover:brightness-110"
-                    >
-                      Reclamar medalla
-                    </button>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setPanelFilter('all')}
+                        className={`rounded-full px-3 py-1.5 text-xs font-black uppercase tracking-wide transition ${
+                          panelFilter === 'all'
+                            ? 'bg-cyan-300 text-slate-950 shadow'
+                            : 'border border-white/15 bg-white/5 text-white'
+                        }`}
+                      >
+                        Pendiente por pegar ({pendingIssuedStickers.length})
+                      </button>
+                    </div>
                   </div>
 
-                  {rewardMessage ? (
-                    <p className="mt-3 text-sm font-semibold text-emerald-800">{rewardMessage}</p>
+                  {savingPlacement ? (
+                    <div className="mt-3 flex flex-wrap items-center gap-3 text-xs font-semibold text-slate-300">
+                      <span className="rounded-full border border-yellow-400/30 bg-yellow-400/10 px-3 py-1 text-yellow-100">
+                        Guardando pegado...
+                      </span>
+                    </div>
+                  ) : null}
+
+                  {panelMessage ? (
+                    <div className="mt-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white">
+                      {panelMessage}
+                    </div>
                   ) : null}
                 </div>
-              ) : null}
 
-              <div
-                className="relative overflow-hidden border-b border-slate-200 p-6"
-                style={{ background: `linear-gradient(135deg, ${currentSelectionTheme.accentSoft}, #ffffff 55%, ${currentSelectionTheme.accentSoft})` }}
-              >
-                <div
-                  className="absolute -right-16 -top-16 h-40 w-40 rounded-full blur-3xl"
-                  style={{ backgroundColor: `${currentSelectionTheme.accent}33` }}
-                />
+                <div className="relative">
+                  <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-8 bg-gradient-to-r from-slate-950/90 to-transparent" />
+                  <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-8 bg-gradient-to-l from-slate-950/90 to-transparent" />
 
-                <div className="relative flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-                  <div className="min-w-0 xl:flex-1">
-                    <div
-                      className="inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-black uppercase tracking-[0.2em] shadow"
-                      style={{
-                        background: currentSelectionTheme.accentGradient,
-                        color: currentSelectionTheme.accentBadgeText,
-                        boxShadow: currentSelectionTheme.accentShadow,
-                      }}
-                    >
-                      <BallIcon />
-                      Selección {currentSelection.number ?? currentSelectionIndex + 1} de {selections.length}
+                  <div className="overflow-x-auto px-4 py-4">
+                    <div className="flex min-w-max gap-3 pr-10">
+                      {visiblePendingStickers.length > 0 ? (
+                        visiblePendingStickers.map((sticker) => {
+                          const isDragging = draggedStickerId === sticker.id
+                          return (
+                            <div
+                              key={sticker.id}
+                              draggable
+                              onDragStart={(event) => handlePanelDragStart(event, sticker.id)}
+                              onDragEnd={handlePanelDragEnd}
+                              className={`group relative w-[118px] shrink-0 cursor-grab overflow-hidden rounded-[22px] border transition-all active:cursor-grabbing ${
+                                isDragging
+                                  ? 'scale-[1.03] border-cyan-300 bg-cyan-50 shadow-[0_18px_36px_rgba(34,211,238,0.28)] opacity-70'
+                                  : 'border-white/10 bg-[linear-gradient(180deg,#ffffff,#ecfeff)] shadow-[0_10px_26px_rgba(15,23,42,0.2)] hover:-translate-y-1 hover:shadow-[0_14px_30px_rgba(15,23,42,0.24)]'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between bg-[linear-gradient(135deg,#0f172a,#164e63)] px-3 py-2 text-[10px] font-black uppercase tracking-[0.14em] text-cyan-100">
+                                <span className="line-clamp-1">
+                                  {selections.find((item) => item.id === sticker.selection_id)?.name ?? 'Selección'}
+                                </span>
+                                <DragIcon />
+                              </div>
+
+                              <div className="relative h-[140px] overflow-hidden bg-white">
+                                {sticker.art_asset_url ? (
+                                  <Image
+                                    src={sticker.art_asset_url}
+                                    alt={sticker.name}
+                                    fill
+                                    className="object-cover"
+                                  />
+                                ) : (
+                                  <div className="flex h-full items-center justify-center text-center text-xs font-black text-slate-400">
+                                    Sin imagen
+                                  </div>
+                                )}
+                              </div>
+
+                            </div>
+                          )
+                        })
+                      ) : (
+                        <div className="flex h-[180px] min-w-full items-center justify-center rounded-[24px] border border-dashed border-white/15 bg-white/[0.04] px-6 text-center text-sm font-semibold text-slate-300">
+                          No hay láminas pendientes en este filtro. Cuando el administrador entregue nuevas, aparecerán aquí.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="overflow-hidden rounded-[30px] border border-white/10 bg-white/95 shadow-[0_12px_40px_rgba(15,23,42,0.35)]">
+                {progress === 100 ? (
+                  <div className="border-b border-emerald-200 bg-[linear-gradient(90deg,#ecfdf5,#dcfce7,#ecfeff)] p-5">
+                    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                      <div>
+                        <h2 className="flex items-center gap-2 text-xl font-black text-emerald-800">
+                          <TrophyIcon />
+                          ¡Álbum completado!
+                        </h2>
+                        <p className="mt-1 text-sm font-medium text-emerald-700">
+                          Ya puedes reclamar tu medalla virtual.
+                        </p>
+                      </div>
+
+                      <button
+                        onClick={handleClaimReward}
+                        className="rounded-2xl bg-[linear-gradient(135deg,#16a34a,#059669)] px-4 py-2.5 text-sm font-black text-white shadow-lg transition hover:brightness-110"
+                      >
+                        Reclamar medalla
+                      </button>
                     </div>
 
-                    <h2 className="mt-3 text-3xl font-black tracking-tight text-slate-900">
-                      {currentSelection.name}
-                    </h2>
-
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <span
-                        className={`rounded-full px-3 py-1 text-xs font-black ${getSelectionStatusBadge(
-                          currentSelectionStats?.status
-                        )}`}
-                      >
-                        {getSelectionStatusLabel(currentSelectionStats?.status)}
-                      </span>
-
-                      <span
-                        className="rounded-full border px-3 py-1 text-xs font-black"
-                        style={{
-                          borderColor: currentSelectionTheme.accentSoftBorder,
-                          backgroundColor: currentSelectionTheme.accentSoft,
-                          color: currentSelectionTheme.accentPillText,
-                        }}
-                      >
-                        Faltantes: {currentSelectionStats?.missing ?? 0}
-                      </span>
-
-                      <span className="rounded-full border border-yellow-200 bg-yellow-50 px-3 py-1 text-xs font-black text-yellow-800">
-                        Progreso: {currentSelectionStats?.obtained ?? 0}/{currentSelectionStats?.total ?? 0}
-                      </span>
-                    </div>
-
-                    {currentSelection.description ? (
-                      <p className="mt-4 text-sm font-semibold text-slate-500">
-                        {currentSelection.description}
-                      </p>
-                    ) : null}
-
-                    {currentSelection.introduccion ? (
-                      <p className="mt-4 max-w-4xl text-base leading-7 text-slate-700">
-                        {currentSelection.introduccion}
-                      </p>
+                    {rewardMessage ? (
+                      <p className="mt-3 text-sm font-semibold text-emerald-800">{rewardMessage}</p>
                     ) : null}
                   </div>
+                ) : null}
 
-                  <div className="flex flex-col items-center gap-4 xl:min-w-[240px] xl:items-end">
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => canGoPrev && setCurrentSelectionIndex((prev) => prev - 1)}
-                        disabled={!canGoPrev}
-                        className="rounded-2xl border px-4 py-2.5 text-sm font-black shadow-sm transition disabled:cursor-not-allowed disabled:opacity-50"
-                        style={{
-                          borderColor: currentSelectionTheme.accentSoftBorder,
-                          backgroundColor: '#ffffff',
-                          color: currentSelectionTheme.accent,
-                        }}
-                      >
-                        Anterior
-                      </button>
-                      <button
-                        onClick={() => canGoNext && setCurrentSelectionIndex((prev) => prev + 1)}
-                        disabled={!canGoNext}
-                        className="rounded-2xl px-4 py-2.5 text-sm font-black text-white shadow-lg transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+                <div
+                  className="relative overflow-hidden border-b border-slate-200 p-6"
+                  style={{ background: `linear-gradient(135deg, ${currentSelectionTheme.accentSoft}, #ffffff 55%, ${currentSelectionTheme.accentSoft})` }}
+                >
+                  <div
+                    className="absolute -right-16 -top-16 h-40 w-40 rounded-full blur-3xl"
+                    style={{ backgroundColor: `${currentSelectionTheme.accent}33` }}
+                  />
+
+                  <div className="relative flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                    <div className="min-w-0 xl:flex-1">
+                      <div
+                        className="inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-black uppercase tracking-[0.2em] shadow"
                         style={{
                           background: currentSelectionTheme.accentGradient,
                           color: currentSelectionTheme.accentBadgeText,
                           boxShadow: currentSelectionTheme.accentShadow,
                         }}
                       >
-                        Siguiente
-                      </button>
-                    </div>
-
-                    {!isCurrentIntroSelection && currentSelectionShield ? (
-                      <div
-                        className="relative h-[220px] w-[220px] overflow-hidden rounded-[24px] border p-0 shadow-sm"
-                        style={{
-                          borderColor: '#d4af37',
-                          background: 'linear-gradient(135deg,#fffdf7,#fff8e1,#fffdf7)',
-                          boxShadow:
-                            '0 0 0 2px rgba(212,175,55,0.35), 0 12px 30px rgba(15,23,42,0.18)',
-                        }}
-                      >
-                        <Image
-                          src={currentSelectionShield}
-                          alt={`Escudo de ${currentSelection.name}`}
-                          fill
-                          className="object-cover"
-                          priority
-                        />
-                      </div>
-                    ) : null}
-                  </div>
-                </div>
-              </div>
-
-              <div className="p-6">
-                {isCurrentIntroSelection ? (
-                  <div className="space-y-6">
-                    <div
-                      className="rounded-[28px] border p-5 shadow-sm"
-                      style={{
-                        borderColor: currentSelectionTheme.accentSoftBorder,
-                        background: `linear-gradient(135deg, ${currentSelectionTheme.accentSoft}, #f8fafc, ${currentSelectionTheme.accentSoft})`,
-                      }}
-                    >
-                      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                        <div className="max-w-3xl">
-                          <div
-                            className="inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-black uppercase tracking-[0.2em]"
-                            style={{
-                              background: currentSelectionTheme.accentGradient,
-                              color: currentSelectionTheme.accentBadgeText,
-                            }}
-                          >
-                            <ShieldIcon />
-                            Paso obligatorio
-                          </div>
-                          <h3 className="mt-3 text-xl font-black text-slate-900">
-                            RETO IA
-                          </h3>
-                          <p className="mt-2 text-sm leading-6 text-slate-700">
-                            En esta selección no se entregan láminas. Todos los usuarios crear una foto ilustrada utilizando un GPT (Chatgpt,Gemini,claudeai entre otros) y subirla, una vez realices esto esta seleccion quedara completada. <span className="font-black"></span>
-                          </p>
-
-                          <div className="mt-4">
-                            <label
-                              htmlFor={`upload-${currentSelection.id}`}
-                              className={`inline-flex cursor-pointer rounded-2xl px-4 py-2.5 text-sm font-black text-white shadow transition ${
-                                uploadingSelectionId === currentSelection.id
-                                  ? 'bg-slate-400'
-                                  : ''
-                              }`}
-                              style={
-                                uploadingSelectionId === currentSelection.id
-                                  ? undefined
-                                  : {
-                                      background: currentSelectionTheme.accentGradient,
-                                      color: currentSelectionTheme.accentBadgeText,
-                                      boxShadow: currentSelectionTheme.accentShadow,
-                                    }
-                              }
-                            >
-                              {uploadingSelectionId === currentSelection.id ? 'Subiendo...' : 'Subir mi foto'}
-                            </label>
-
-                            <input
-                              id={`upload-${currentSelection.id}`}
-                              type="file"
-                              accept="image/*"
-                              className="hidden"
-                              onChange={(event) => handleSelectionPhotoUpload(currentSelection, event)}
-                              disabled={uploadingSelectionId === currentSelection.id}
-                            />
-
-                            {uploadMessageBySelection[currentSelection.id] ? (
-                              <p className="mt-3 text-sm font-semibold text-slate-700">
-                                {uploadMessageBySelection[currentSelection.id]}
-                              </p>
-                            ) : null}
-                          </div>
-                        </div>
-
-                        <div className="min-w-[220px] rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
-                          <div className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">
-                            Estado
-                          </div>
-                          <div className="mt-2 text-lg font-black text-slate-900">
-                            {userSelectionPhotos[currentSelection.id]?.photo_url ? 'Completa' : 'Pendiente'}
-                          </div>
-                          <div className="mt-3 text-sm text-slate-600"></div>
-                        </div>
+                        <BallIcon />
+                        Selección {currentSelection.number ?? currentSelectionIndex + 1} de {selections.length}
                       </div>
 
-                      {userSelectionPhotos[currentSelection.id]?.photo_url ? (
-                        <div className="mt-6">
-                          <div className="mb-2 text-sm font-black uppercase tracking-[0.16em] text-slate-700">
-                            Tu foto registrada
-                          </div>
-                          <div className="overflow-hidden rounded-[24px] border border-slate-200 bg-white">
-                            <Image
-                              src={userSelectionPhotos[currentSelection.id].photo_url}
-                              alt="Foto subida por el usuario"
-                              width={900}
-                              height={650}
-                              className="h-auto w-full object-cover"
-                            />
-                          </div>
-                        </div>
+                      <h2 className="mt-3 text-3xl font-black tracking-tight text-slate-900">
+                        {currentSelection.name}
+                      </h2>
+
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <span
+                          className={`rounded-full px-3 py-1 text-xs font-black ${getSelectionStatusBadge(
+                            currentSelectionStats?.status
+                          )}`}
+                        >
+                          {getSelectionStatusLabel(currentSelectionStats?.status)}
+                        </span>
+
+                        <span
+                          className="rounded-full border px-3 py-1 text-xs font-black"
+                          style={{
+                            borderColor: currentSelectionTheme.accentSoftBorder,
+                            backgroundColor: currentSelectionTheme.accentSoft,
+                            color: currentSelectionTheme.accentPillText,
+                          }}
+                        >
+                          Faltantes: {currentSelectionStats?.missing ?? 0}
+                        </span>
+
+                        <span className="rounded-full border border-yellow-200 bg-yellow-50 px-3 py-1 text-xs font-black text-yellow-800">
+                          Progreso: {currentSelectionStats?.obtained ?? 0}/{currentSelectionStats?.total ?? 0}
+                        </span>
+                      </div>
+
+                      {currentSelection.description ? (
+                        <p className="mt-4 text-sm font-semibold text-slate-500">
+                          {currentSelection.description}
+                        </p>
+                      ) : null}
+
+                      {currentSelection.introduccion ? (
+                        <p className="mt-4 max-w-4xl text-base leading-7 text-slate-700">
+                          {currentSelection.introduccion}
+                        </p>
                       ) : null}
                     </div>
 
-                    <div>
-                      <div className="mb-4 flex items-center gap-2 text-lg font-black text-slate-900">
-                        <BallIcon />
-                        Premios a entregar
+                    <div className="flex flex-col items-center gap-4 xl:min-w-[240px] xl:items-end">
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => canGoPrev && setCurrentSelectionIndex((prev) => prev - 1)}
+                          disabled={!canGoPrev}
+                          className="rounded-2xl border px-4 py-2.5 text-sm font-black shadow-sm transition disabled:cursor-not-allowed disabled:opacity-50"
+                          style={{
+                            borderColor: currentSelectionTheme.accentSoftBorder,
+                            backgroundColor: '#ffffff',
+                            color: currentSelectionTheme.accent,
+                          }}
+                        >
+                          Anterior
+                        </button>
+                        <button
+                          onClick={() => canGoNext && setCurrentSelectionIndex((prev) => prev + 1)}
+                          disabled={!canGoNext}
+                          className="rounded-2xl px-4 py-2.5 text-sm font-black text-white shadow-lg transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+                          style={{
+                            background: currentSelectionTheme.accentGradient,
+                            color: currentSelectionTheme.accentBadgeText,
+                            boxShadow: currentSelectionTheme.accentShadow,
+                          }}
+                        >
+                          Siguiente
+                        </button>
                       </div>
-                      <p className="mb-5 text-sm text-slate-600">
-                        <span className="font-black"></span>
-                      </p>
 
-                      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-                        {INTRO_REFERENCE_IMAGES.map((item) => (
-                          <div
-                            key={item.src}
-                            className="overflow-hidden rounded-[24px] border border-slate-200 bg-[linear-gradient(180deg,#ffffff,#f8fafc)] shadow-sm"
-                          >
-                            <div className="overflow-hidden border-b border-slate-200 bg-white">
-                              <div className="text-center text-sm font-black text-slate-900">{item.title}</div>
-                              <Image
-                                src={item.src}
-                                alt={item.title}
-                                width={800}
-                                height={600}
-                                className="h-60 w-full object-cover"
-                              />
-                            </div>
-                            <div className="p-4"></div>
-                          </div>
-                        ))}
-                      </div>
+                      {!isCurrentIntroSelection && currentSelectionShield ? (
+                        <div
+                          className="relative h-[220px] w-[220px] overflow-hidden rounded-[24px] border p-0 shadow-sm"
+                          style={{
+                            borderColor: '#d4af37',
+                            background: 'linear-gradient(135deg,#fffdf7,#fff8e1,#fffdf7)',
+                            boxShadow:
+                              '0 0 0 2px rgba(212,175,55,0.35), 0 12px 30px rgba(15,23,42,0.18)',
+                          }}
+                        >
+                          <Image
+                            src={currentSelectionShield}
+                            alt={`Escudo de ${currentSelection.name}`}
+                            fill
+                            className="object-cover"
+                            priority
+                          />
+                        </div>
+                      ) : null}
                     </div>
                   </div>
-                ) : (
-                  <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
-                    {currentSelectionStickers.map((sticker) => {
-                      const isObtained = issuedStickerIds.has(sticker.id)
+                </div>
 
-                      return (
-                        <div
-                          key={sticker.id}
-                          className={`group relative overflow-hidden rounded-[24px] border transition-all ${
-                            isObtained
-                              ? ''
-                              : 'border-slate-200 bg-[linear-gradient(180deg,#f8fafc,#eef2f7)] shadow-sm'
-                          }`}
-                          style={
-                            isObtained
-                              ? {
-                                  borderColor: currentSelectionTheme.accentCardBorder,
-                                  background: currentSelectionTheme.accentCard,
-                                  boxShadow: currentSelectionTheme.accentCardShadow,
-                                }
-                              : undefined
-                          }
-                        >
-                          <div
-                            className={`relative flex items-center justify-between px-3 py-2 ${
-                              isObtained
-                                ? 'text-white'
-                                : 'bg-[linear-gradient(135deg,#cbd5e1,#e2e8f0)] text-slate-700'
-                            }`}
-                            style={isObtained ? { background: currentSelectionTheme.accentGradient, color: currentSelectionTheme.accentBadgeText } : undefined}
-                          >
-                            <span className="flex items-center gap-1 text-[9px] font-black uppercase tracking-[0.18em]">
+                <div className="p-6">
+                  {isCurrentIntroSelection ? (
+                    <div className="space-y-6">
+                      <div
+                        className="rounded-[28px] border p-5 shadow-sm"
+                        style={{
+                          borderColor: currentSelectionTheme.accentSoftBorder,
+                          background: `linear-gradient(135deg, ${currentSelectionTheme.accentSoft}, #f8fafc, ${currentSelectionTheme.accentSoft})`,
+                        }}
+                      >
+                        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                          <div className="max-w-3xl">
+                            <div
+                              className="inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-black uppercase tracking-[0.2em]"
+                              style={{
+                                background: currentSelectionTheme.accentGradient,
+                                color: currentSelectionTheme.accentBadgeText,
+                              }}
+                            >
                               <ShieldIcon />
-                              {currentSelection.name}
-                            </span>
-                            <span className="rounded-full bg-white/20 px-2 py-0.5 text-xs font-black">
-                              #{sticker.sticker_number}
-                            </span>
+                              Paso obligatorio
+                            </div>
+                            <h3 className="mt-3 text-xl font-black text-slate-900">
+                              RETO IA
+                            </h3>
+                            <p className="mt-2 text-sm leading-6 text-slate-700">
+                              En esta selección no se entregan láminas. Todos los usuarios crear una foto ilustrada utilizando un GPT (Chatgpt,Gemini,claudeai entre otros) y subirla, una vez realices esto esta selección quedará completada.
+                            </p>
+
+                            <div className="mt-4">
+                              <label
+                                htmlFor={`upload-${currentSelection.id}`}
+                                className={`inline-flex cursor-pointer rounded-2xl px-4 py-2.5 text-sm font-black text-white shadow transition ${
+                                  uploadingSelectionId === currentSelection.id
+                                    ? 'bg-slate-400'
+                                    : ''
+                                }`}
+                                style={
+                                  uploadingSelectionId === currentSelection.id
+                                    ? undefined
+                                    : {
+                                        background: currentSelectionTheme.accentGradient,
+                                        color: currentSelectionTheme.accentBadgeText,
+                                        boxShadow: currentSelectionTheme.accentShadow,
+                                      }
+                                }
+                              >
+                                {uploadingSelectionId === currentSelection.id ? 'Subiendo...' : 'Subir mi foto'}
+                              </label>
+
+                              <input
+                                id={`upload-${currentSelection.id}`}
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                onChange={(event) => handleSelectionPhotoUpload(currentSelection, event)}
+                                disabled={uploadingSelectionId === currentSelection.id}
+                              />
+
+                              {uploadMessageBySelection[currentSelection.id] ? (
+                                <p className="mt-3 text-sm font-semibold text-slate-700">
+                                  {uploadMessageBySelection[currentSelection.id]}
+                                </p>
+                              ) : null}
+                            </div>
                           </div>
 
-                          {isObtained ? (
-                            <div
-                              className="pointer-events-none absolute inset-x-0 top-0 h-24"
-                              style={{ background: `radial-gradient(circle at top, rgba(255,255,255,0.6), ${currentSelectionTheme.accent}00 60%)` }}
-                            />
-                          ) : null}
-
-                          <div className="p-3">
-                            <div className="overflow-hidden rounded-[18px] border border-slate-200 bg-white">
-                              {isObtained ? (
-                                sticker.art_asset_url ? (
-                                  <Image
-                                    src={sticker.art_asset_url}
-                                    alt={sticker.name}
-                                    width={300}
-                                    height={400}
-                                    className="h-[320px] w-full object-cover"
-                                  />
-                                ) : (
-                                  <div className="flex h-[320px] items-center justify-center text-sm font-semibold text-slate-400">
-                                    Sin imagen
-                                  </div>
-                                )
-                              ) : (
-                                <div className="relative flex h-[320px] items-center justify-center bg-[linear-gradient(135deg,#ffffff,#e2e8f0)] text-center text-sm font-black text-slate-400">
-                                  <div className="absolute inset-0 opacity-40 [background-image:linear-gradient(45deg,transparent_25%,rgba(148,163,184,0.25)_25%,rgba(148,163,184,0.25)_50%,transparent_50%,transparent_75%,rgba(148,163,184,0.25)_75%)] [background-size:24px_24px]" />
-                                  <div className="relative flex flex-col items-center gap-2">
-                                    <BallIcon />
-                                    Espacio vacío
-                                  </div>
-                                </div>
-                              )}
+                          <div className="min-w-[220px] rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+                            <div className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">
+                              Estado
                             </div>
-
-                            <div className="mt-3 min-h-[36px] text-xs font-black leading-snug text-slate-900">
-                              {sticker.name}
-                            </div>
-
-                            {sticker.description ? (
-                              <p className="mt-1 min-h-[28px] text-[11px] font-medium leading-snug text-slate-600"></p>
-                            ) : (
-                              <div className="mt-1 min-h-[28px]" />
-                            )}
-
-                            <div className="mt-3">
-                              {isObtained ? (
-                                <div className="inline-flex rounded-full border border-yellow-200 bg-[linear-gradient(135deg,#fef9c3,#fde68a)] px-3 py-1 text-[11px] font-black uppercase tracking-wide text-yellow-900 shadow-sm">
-                                  PEGADO
-                                </div>
-                              ) : (
-                                <div className="inline-flex rounded-full border border-slate-300 bg-slate-200 px-3 py-1 text-[11px] font-black uppercase tracking-wide text-slate-600">
-                                  Pendiente
-                                </div>
-                              )}
+                            <div className="mt-2 text-lg font-black text-slate-900">
+                              {userSelectionPhotos[currentSelection.id]?.photo_url ? 'Completa' : 'Pendiente'}
                             </div>
                           </div>
                         </div>
-                      )
-                    })}
-                  </div>
-                )}
+
+                        {userSelectionPhotos[currentSelection.id]?.photo_url ? (
+                          <div className="mt-6">
+                            <div className="mb-2 text-sm font-black uppercase tracking-[0.16em] text-slate-700">
+                              Tu foto registrada
+                            </div>
+                            <div className="overflow-hidden rounded-[24px] border border-slate-200 bg-white">
+                              <Image
+                                src={userSelectionPhotos[currentSelection.id].photo_url}
+                                alt="Foto subida por el usuario"
+                                width={900}
+                                height={650}
+                                className="h-auto w-full object-cover"
+                              />
+                            </div>
+                          </div>
+                        ) : null}
+                      </div>
+
+                      <div>
+                        <div className="mb-4 flex items-center gap-2 text-lg font-black text-slate-900">
+                          <BallIcon />
+                          Premios a entregar
+                        </div>
+
+                        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+                          {INTRO_REFERENCE_IMAGES.map((item) => (
+                            <div
+                              key={item.src}
+                              className="overflow-hidden rounded-[24px] border border-slate-200 bg-[linear-gradient(180deg,#ffffff,#f8fafc)] shadow-sm"
+                            >
+                              <div className="overflow-hidden border-b border-slate-200 bg-white">
+                                <div className="text-center text-sm font-black text-slate-900">{item.title}</div>
+                                <Image
+                                  src={item.src}
+                                  alt={item.title}
+                                  width={800}
+                                  height={600}
+                                  className="h-60 w-full object-cover"
+                                />
+                              </div>
+                              <div className="p-4"></div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
+                      {currentSelectionStickers.map((sticker) => {
+                        const isPlaced = placedStickerIds.has(sticker.id)
+                        const isHovering = hoveredStickerId === sticker.id
+                        const isCorrectTarget = draggedStickerId === sticker.id
+                        const showDropHint = Boolean(draggedStickerId && !isPlaced)
+
+                        return (
+                          <div
+                            key={sticker.id}
+                            onDragOver={(event) => !isPlaced && handleCardDragOver(event, sticker)}
+                            onDragLeave={() => handleCardDragLeave(sticker.id)}
+                            onDrop={(event) => !isPlaced && handleCardDrop(event, sticker)}
+                            className={`group relative overflow-hidden rounded-[24px] border transition-all ${
+                              isPlaced
+                                ? ''
+                                : 'border-slate-200 bg-[linear-gradient(180deg,#f8fafc,#eef2f7)] shadow-sm'
+                            } ${
+                              isHovering && showDropHint
+                                ? isCorrectTarget
+                                  ? 'ring-4 ring-emerald-300'
+                                  : 'ring-4 ring-amber-300'
+                                : ''
+                            }`}
+                            style={
+                              isPlaced
+                                ? {
+                                    borderColor: currentSelectionTheme.accentCardBorder,
+                                    background: currentSelectionTheme.accentCard,
+                                    boxShadow: currentSelectionTheme.accentCardShadow,
+                                  }
+                                : undefined
+                            }
+                          >
+                            <div
+                              className={`relative flex items-center justify-between px-3 py-2 ${
+                                isPlaced
+                                  ? 'text-white'
+                                  : 'bg-[linear-gradient(135deg,#cbd5e1,#e2e8f0)] text-slate-700'
+                              }`}
+                              style={isPlaced ? { background: currentSelectionTheme.accentGradient, color: currentSelectionTheme.accentBadgeText } : undefined}
+                            >
+                              <span className="flex items-center gap-1 text-[9px] font-black uppercase tracking-[0.18em]">
+                                <ShieldIcon />
+                                {currentSelection.name}
+                              </span>
+                              <span className="rounded-full bg-white/20 px-2 py-0.5 text-xs font-black">
+                                #{sticker.sticker_number}
+                              </span>
+                            </div>
+
+                            {isPlaced ? (
+                              <div
+                                className="pointer-events-none absolute inset-x-0 top-0 h-24"
+                                style={{ background: `radial-gradient(circle at top, rgba(255,255,255,0.6), ${currentSelectionTheme.accent}00 60%)` }}
+                              />
+                            ) : null}
+
+                            {showDropHint && !isPlaced ? (
+                              <div
+                                className={`pointer-events-none absolute inset-x-3 top-12 z-10 rounded-2xl border px-3 py-2 text-center text-xs font-black uppercase tracking-[0.18em] ${
+                                  isCorrectTarget
+                                    ? 'border-emerald-300 bg-emerald-50 text-emerald-700'
+                                    : isHovering
+                                      ? 'border-amber-300 bg-amber-50 text-amber-700'
+                                      : 'border-slate-300 bg-white/90 text-slate-500'
+                                }`}
+                              >
+                                {isCorrectTarget
+                                  ? 'Suelta aquí'
+                                  : isHovering
+                                    ? 'No corresponde'
+                                    : 'Espacio disponible'}
+                              </div>
+                            ) : null}
+
+                            <div className="p-3">
+                              <div className="overflow-hidden rounded-[18px] border border-slate-200 bg-white">
+                                {isPlaced ? (
+                                  sticker.art_asset_url ? (
+                                    <Image
+                                      src={sticker.art_asset_url}
+                                      alt={sticker.name}
+                                      width={300}
+                                      height={400}
+                                      className="h-[320px] w-full object-cover"
+                                    />
+                                  ) : (
+                                    <div className="flex h-[320px] items-center justify-center text-sm font-semibold text-slate-400">
+                                      Sin imagen
+                                    </div>
+                                  )
+                                ) : (
+                                  <div className="relative flex h-[320px] items-center justify-center bg-[linear-gradient(135deg,#ffffff,#e2e8f0)] text-center text-sm font-black text-slate-400">
+                                    <div className="absolute inset-0 opacity-40 [background-image:linear-gradient(45deg,transparent_25%,rgba(148,163,184,0.25)_25%,rgba(148,163,184,0.25)_50%,transparent_50%,transparent_75%,rgba(148,163,184,0.25)_75%)] [background-size:24px_24px]" />
+                                    <div className="relative flex flex-col items-center gap-2">
+                                      <BallIcon />
+                                      Arrastra la lámina aquí
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+
+                              <div className="mt-3 min-h-[36px] text-xs font-black leading-snug text-slate-900">
+                                {sticker.name}
+                              </div>
+
+                              {sticker.description ? (
+                                <p className="mt-1 min-h-[28px] text-[11px] font-medium leading-snug text-slate-600">
+                                  {sticker.description}
+                                </p>
+                              ) : (
+                                <div className="mt-1 min-h-[28px]" />
+                              )}
+
+                              <div className="mt-3 flex flex-wrap items-center gap-2">
+                                {isPlaced ? (
+                                  <>
+                                    <div className="inline-flex rounded-full border border-yellow-200 bg-[linear-gradient(135deg,#fef9c3,#fde68a)] px-3 py-1 text-[11px] font-black uppercase tracking-wide text-yellow-900 shadow-sm">
+                                      PEGADO
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleReturnStickerToPanel(sticker.id)}
+                                      className="inline-flex rounded-full border border-slate-300 bg-white px-3 py-1 text-[11px] font-black uppercase tracking-wide text-slate-700 transition hover:bg-slate-50"
+                                    >
+                                      Devolver al panel
+                                    </button>
+                                  </>
+                                ) : (
+                                  <div className="inline-flex rounded-full border border-slate-300 bg-slate-200 px-3 py-1 text-[11px] font-black uppercase tracking-wide text-slate-600">
+                                    Pendiente
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </section>
