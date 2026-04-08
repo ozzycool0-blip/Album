@@ -147,25 +147,17 @@ export default function AdminPagePaniniV3() {
     }
 
     try {
-      const { data: usersData, error: usersError } = await supabase
-        .from('users')
-        .select('id, email, tenant_id, full_name')
-        .eq('tenant_id', currentTenantId)
-        .order('email', { ascending: true })
-
-      if (usersError) throw usersError
-
-      const safeUsers = (usersData as UserRow[]) || []
-      const userIds = safeUsers.map((user) => user.id)
-      const safeUserIds = userIds.length > 0 ? userIds : ['__no_users__']
-
       const [
+        usersRes,
         selectionsRes,
         stickersRes,
-        issuedRes,
-        placementsRes,
         packsRes,
       ] = await Promise.all([
+        supabase
+          .from('users')
+          .select('id, email, tenant_id, full_name')
+          .eq('tenant_id', currentTenantId)
+          .order('email', { ascending: true }),
         supabase
           .from('selections')
           .select('id, name, order_index, tenant_id')
@@ -178,38 +170,67 @@ export default function AdminPagePaniniV3() {
           .eq('is_active', true)
           .order('sticker_number', { ascending: true }),
         supabase
-          .from('issued_stickers')
-          .select('id, user_id, sticker_id, pack_id, created_at')
-          .in('user_id', safeUserIds),
-        supabase
-          .from('user_sticker_placements')
-          .select('id, user_id, sticker_id, selection_id, tenant_id, created_at')
-          .in('user_id', safeUserIds),
-        supabase
           .from('sticker_packs')
           .select('id, user_id, tenant_id, created_at')
           .eq('tenant_id', currentTenantId)
           .order('created_at', { ascending: false }),
       ])
 
+      if (usersRes.error) throw usersRes.error
       if (selectionsRes.error) throw selectionsRes.error
       if (stickersRes.error) throw stickersRes.error
-      if (issuedRes.error) throw issuedRes.error
-      if (placementsRes.error) throw placementsRes.error
       if (packsRes.error) throw packsRes.error
+
+      const safeUsers = (usersRes.data as UserRow[]) || []
+      const safeUserIds = safeUsers.map((user) => user.id)
+
+      let issuedData: IssuedStickerRow[] = []
+      let placementsData: PlacementRow[] = []
+
+      if (safeUserIds.length > 0) {
+        const [issuedByUsersRes, placementsByTenantRes] = await Promise.all([
+          supabase
+            .from('issued_stickers')
+            .select('id, user_id, sticker_id, pack_id, created_at')
+            .in('user_id', safeUserIds),
+          supabase
+            .from('user_sticker_placements')
+            .select('id, user_id, sticker_id, selection_id, tenant_id, created_at')
+            .eq('tenant_id', currentTenantId),
+        ])
+
+        if (issuedByUsersRes.error) throw issuedByUsersRes.error
+
+        if (placementsByTenantRes.error) {
+          const placementsByUsersRes = await supabase
+            .from('user_sticker_placements')
+            .select('id, user_id, sticker_id, selection_id, tenant_id, created_at')
+            .in('user_id', safeUserIds)
+
+          if (placementsByUsersRes.error) throw placementsByUsersRes.error
+          placementsData = (placementsByUsersRes.data as PlacementRow[]) || []
+        } else {
+          const rawPlacements = (placementsByTenantRes.data as PlacementRow[]) || []
+          placementsData = rawPlacements.filter((item) => safeUserIds.includes(item.user_id))
+        }
+
+        issuedData = (issuedByUsersRes.data as IssuedStickerRow[]) || []
+      }
 
       setUsers(safeUsers)
       setSelections((selectionsRes.data as SelectionRow[]) || [])
       setStickers((stickersRes.data as StickerRow[]) || [])
-      setIssuedStickers((issuedRes.data as IssuedStickerRow[]) || [])
-      setPlacements((placementsRes.data as PlacementRow[]) || [])
+      setIssuedStickers(issuedData)
+      setPlacements(placementsData)
       setPacks((packsRes.data as StickerPackRow[]) || [])
 
       const firstUserId = safeUsers[0]?.id || ''
       setSelectedUserId((prev) => (safeUsers.some((user) => user.id === prev) ? prev : firstUserId))
+      return { ok: true as const }
     } catch (error) {
       console.error(error)
       setGlobalMessage('No fue posible cargar toda la información del panel admin.')
+      return { ok: false as const }
     } finally {
       if (silent) {
         setRefreshingDashboard(false)
@@ -222,8 +243,10 @@ export default function AdminPagePaniniV3() {
   async function handleManualRefresh() {
     if (!tenantId) return
     setGlobalMessage('')
-    await loadAdminData(tenantId, { silent: true })
-    setGlobalMessage('Dashboard actualizado correctamente.')
+    const result = await loadAdminData(tenantId, { silent: true })
+    if (result.ok) {
+      setGlobalMessage('Dashboard actualizado correctamente.')
+    }
   }
 
   useEffect(() => {
