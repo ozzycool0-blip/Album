@@ -1,4 +1,3 @@
-
 'use client'
 
 import { FormEvent, useEffect, useMemo, useState } from 'react'
@@ -82,6 +81,7 @@ function randomPickWithoutDuplicates<T>(items: T[], size: number) {
 export default function AdminPagePaniniV3() {
   const [sessionChecked, setSessionChecked] = useState(false)
   const [loadingPage, setLoadingPage] = useState(true)
+  const [refreshingDashboard, setRefreshingDashboard] = useState(false)
   const [tenantId, setTenantId] = useState('')
   const [adminName, setAdminName] = useState('')
   const [users, setUsers] = useState<UserRow[]>([])
@@ -137,22 +137,35 @@ export default function AdminPagePaniniV3() {
     setSessionChecked(true)
   }
 
-  async function loadAdminData(currentTenantId: string) {
-    setLoadingPage(true)
+  async function loadAdminData(currentTenantId: string, options?: { silent?: boolean }) {
+    const silent = options?.silent ?? false
+
+    if (silent) {
+      setRefreshingDashboard(true)
+    } else {
+      setLoadingPage(true)
+    }
+
     try {
+      const { data: usersData, error: usersError } = await supabase
+        .from('users')
+        .select('id, email, tenant_id, full_name')
+        .eq('tenant_id', currentTenantId)
+        .order('email', { ascending: true })
+
+      if (usersError) throw usersError
+
+      const safeUsers = (usersData as UserRow[]) || []
+      const userIds = safeUsers.map((user) => user.id)
+      const safeUserIds = userIds.length > 0 ? userIds : ['__no_users__']
+
       const [
-        usersRes,
         selectionsRes,
         stickersRes,
         issuedRes,
         placementsRes,
         packsRes,
       ] = await Promise.all([
-        supabase
-          .from('users')
-          .select('id, email, tenant_id, full_name')
-          .eq('tenant_id', currentTenantId)
-          .order('email', { ascending: true }),
         supabase
           .from('selections')
           .select('id, name, order_index, tenant_id')
@@ -167,21 +180,11 @@ export default function AdminPagePaniniV3() {
         supabase
           .from('issued_stickers')
           .select('id, user_id, sticker_id, pack_id, created_at')
-          .in(
-            'user_id',
-            (
-              (
-                await supabase
-                  .from('users')
-                  .select('id')
-                  .eq('tenant_id', currentTenantId)
-              ).data || []
-            ).map((u: { id: string }) => u.id)
-          ),
+          .in('user_id', safeUserIds),
         supabase
           .from('user_sticker_placements')
           .select('id, user_id, sticker_id, selection_id, tenant_id, created_at')
-          .eq('tenant_id', currentTenantId),
+          .in('user_id', safeUserIds),
         supabase
           .from('sticker_packs')
           .select('id, user_id, tenant_id, created_at')
@@ -189,21 +192,38 @@ export default function AdminPagePaniniV3() {
           .order('created_at', { ascending: false }),
       ])
 
-      setUsers((usersRes.data as UserRow[]) || [])
+      if (selectionsRes.error) throw selectionsRes.error
+      if (stickersRes.error) throw stickersRes.error
+      if (issuedRes.error) throw issuedRes.error
+      if (placementsRes.error) throw placementsRes.error
+      if (packsRes.error) throw packsRes.error
+
+      setUsers(safeUsers)
       setSelections((selectionsRes.data as SelectionRow[]) || [])
       setStickers((stickersRes.data as StickerRow[]) || [])
       setIssuedStickers((issuedRes.data as IssuedStickerRow[]) || [])
       setPlacements((placementsRes.data as PlacementRow[]) || [])
       setPacks((packsRes.data as StickerPackRow[]) || [])
 
-      const firstUserId = ((usersRes.data as UserRow[]) || [])[0]?.id || ''
-      setSelectedUserId((prev) => prev || firstUserId)
+      const firstUserId = safeUsers[0]?.id || ''
+      setSelectedUserId((prev) => (safeUsers.some((user) => user.id === prev) ? prev : firstUserId))
     } catch (error) {
       console.error(error)
       setGlobalMessage('No fue posible cargar toda la información del panel admin.')
     } finally {
-      setLoadingPage(false)
+      if (silent) {
+        setRefreshingDashboard(false)
+      } else {
+        setLoadingPage(false)
+      }
     }
+  }
+
+  async function handleManualRefresh() {
+    if (!tenantId) return
+    setGlobalMessage('')
+    await loadAdminData(tenantId, { silent: true })
+    setGlobalMessage('Dashboard actualizado correctamente.')
   }
 
   useEffect(() => {
@@ -305,7 +325,7 @@ export default function AdminPagePaniniV3() {
   }, [packs, users, issuedStickers, stickerById])
 
   async function refreshAfterAction(message?: string) {
-    await loadAdminData(tenantId)
+    await loadAdminData(tenantId, { silent: true })
     if (message) setGlobalMessage(message)
   }
 
@@ -506,22 +526,33 @@ export default function AdminPagePaniniV3() {
                 </p>
               </div>
 
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                <div className="rounded-2xl border border-white/15 bg-white/10 p-3 text-white">
-                  <div className="text-[11px] font-black uppercase tracking-wide text-blue-100">Admin</div>
-                  <div className="mt-1 text-sm font-bold">{adminName}</div>
-                </div>
-                <div className="rounded-2xl border border-white/15 bg-white/10 p-3 text-white">
-                  <div className="text-[11px] font-black uppercase tracking-wide text-blue-100">Usuarios</div>
-                  <div className="mt-1 text-2xl font-black">{totalUsers}</div>
-                </div>
-                <div className="rounded-2xl border border-white/15 bg-white/10 p-3 text-white">
-                  <div className="text-[11px] font-black uppercase tracking-wide text-blue-100">Láminas</div>
-                  <div className="mt-1 text-2xl font-black">{totalStickers}</div>
-                </div>
-                <div className="rounded-2xl border border-white/15 bg-white/10 p-3 text-white">
-                  <div className="text-[11px] font-black uppercase tracking-wide text-blue-100">Pegadas</div>
-                  <div className="mt-1 text-2xl font-black">{totalPlaced}</div>
+              <div className="flex flex-col gap-3 lg:items-end">
+                <button
+                  type="button"
+                  onClick={handleManualRefresh}
+                  disabled={refreshingDashboard || !tenantId}
+                  className="inline-flex items-center justify-center rounded-2xl border border-white/20 bg-white/10 px-4 py-3 text-sm font-black text-white transition hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {refreshingDashboard ? 'Actualizando dashboard...' : 'Refrescar dashboard'}
+                </button>
+
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  <div className="rounded-2xl border border-white/15 bg-white/10 p-3 text-white">
+                    <div className="text-[11px] font-black uppercase tracking-wide text-blue-100">Admin</div>
+                    <div className="mt-1 text-sm font-bold">{adminName}</div>
+                  </div>
+                  <div className="rounded-2xl border border-white/15 bg-white/10 p-3 text-white">
+                    <div className="text-[11px] font-black uppercase tracking-wide text-blue-100">Usuarios</div>
+                    <div className="mt-1 text-2xl font-black">{totalUsers}</div>
+                  </div>
+                  <div className="rounded-2xl border border-white/15 bg-white/10 p-3 text-white">
+                    <div className="text-[11px] font-black uppercase tracking-wide text-blue-100">Láminas</div>
+                    <div className="mt-1 text-2xl font-black">{totalStickers}</div>
+                  </div>
+                  <div className="rounded-2xl border border-white/15 bg-white/10 p-3 text-white">
+                    <div className="text-[11px] font-black uppercase tracking-wide text-blue-100">Pegadas</div>
+                    <div className="mt-1 text-2xl font-black">{totalPlaced}</div>
+                  </div>
                 </div>
               </div>
             </div>
