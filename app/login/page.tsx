@@ -1,4 +1,3 @@
-
 'use client'
 
 import { useEffect, useState } from 'react'
@@ -7,7 +6,7 @@ import { supabase } from '@/lib/supabase/client'
 
 type Tenant = {
   id: string
-  name: string
+  nit: string
 }
 
 export default function LoginPage() {
@@ -29,8 +28,8 @@ export default function LoginPage() {
   async function loadTenants() {
     const { data, error } = await supabase
       .from('tenants')
-      .select('id, name')
-      .order('name', { ascending: true })
+      .select('id, nit')
+      .order('nit', { ascending: true })
 
     if (!error && data) {
       setTenants(data)
@@ -124,7 +123,7 @@ export default function LoginPage() {
 
         <div className="mt-4">
           <label className="mb-1 block text-sm font-semibold">
-            Empresa
+            Empresa (NIT)
           </label>
 
           <select
@@ -133,9 +132,10 @@ export default function LoginPage() {
             className="w-full rounded-md border p-2"
           >
             <option value="">Selecciona una empresa</option>
+
             {tenants.map((tenant) => (
               <option key={tenant.id} value={tenant.id}>
-                {tenant.name}
+                {tenant.nit}
               </option>
             ))}
           </select>
