@@ -368,6 +368,8 @@ const INTRO_SELECTION_NAME = 'Indicaciones de llenado'
 const USER_PHOTOS_TABLE = 'user_selection_photos'
 const UPLOAD_BUCKET = 'album-uploads'
 const USER_STICKER_PLACEMENTS_TABLE = 'user_sticker_placements'
+const MAX_UPLOAD_SIZE_BYTES = 1 * 512 * 512
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png']
 
 const INTRO_REFERENCE_IMAGES: IntroReferenceImage[] = [
   { src: '/stickers/premio1.png', title: 'Premio # 1' },
@@ -551,6 +553,84 @@ export default function AlbumClient() {
     loadAlbum()
   }, [])
 
+  async function compressImageIfNeeded(file: File): Promise<File> {
+    if (file.size <= MAX_UPLOAD_SIZE_BYTES) return file
+
+    const imageUrl = URL.createObjectURL(file)
+
+    try {
+      const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const img = new window.Image()
+        img.onload = () => resolve(img)
+        img.onerror = () => reject(new Error('No fue posible procesar la imagen.'))
+        img.src = imageUrl
+      })
+
+      let width = image.width
+      let height = image.height
+      const maxDimension = 1600
+
+      if (width > maxDimension || height > maxDimension) {
+        const scale = Math.min(maxDimension / width, maxDimension / height)
+        width = Math.round(width * scale)
+        height = Math.round(height * scale)
+      }
+
+      const canvas = document.createElement('canvas')
+      canvas.width = width
+      canvas.height = height
+
+      const context = canvas.getContext('2d')
+
+      if (!context) {
+        throw new Error('No fue posible preparar la compresión de la imagen.')
+      }
+
+      context.drawImage(image, 0, 0, width, height)
+
+      const outputType = file.type === 'image/png' ? 'image/png' : 'image/jpeg'
+
+      let quality = outputType === 'image/png' ? undefined : 0.9
+      let compressedFile: File | null = null
+
+      for (let attempt = 0; attempt < 7; attempt++) {
+        const blob = await new Promise<Blob | null>((resolve) => {
+          canvas.toBlob(resolve, outputType, quality)
+        })
+
+        if (!blob) {
+          throw new Error('No fue posible generar la imagen comprimida.')
+        }
+
+        const extension = outputType === 'image/png' ? 'png' : 'jpg'
+        const fileName = file.name.replace(/\.[^.]+$/, '') || 'imagen'
+
+        compressedFile = new File([blob], `${fileName}.${extension}`, {
+          type: outputType,
+          lastModified: Date.now(),
+        })
+
+        if (compressedFile.size <= MAX_UPLOAD_SIZE_BYTES) {
+          return compressedFile
+        }
+
+        if (outputType === 'image/png') {
+          width = Math.max(800, Math.round(width * 0.85))
+          height = Math.max(800, Math.round(height * 0.85))
+          canvas.width = width
+          canvas.height = height
+          context.drawImage(image, 0, 0, width, height)
+        } else {
+          quality = Math.max(0.45, (quality ?? 0.9) - 0.1)
+        }
+      }
+
+      throw new Error('La imagen no pudo comprimirse por debajo de 512 Kb. Usa una imagen más liviana.')
+    } finally {
+      URL.revokeObjectURL(imageUrl)
+    }
+  }
+
   async function handleClaimReward() {
     const {
       data: { user },
@@ -583,10 +663,10 @@ export default function AlbumClient() {
 
     if (!file || !currentUserId || !tenantId) return
 
-    if (!file.type.startsWith('image/')) {
+    if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
       setUploadMessageBySelection((prev) => ({
         ...prev,
-        [selection.id]: 'Debes seleccionar un archivo de imagen válido.',
+        [selection.id]: 'Archivo no permitido. Solo puedes subir imágenes JPG, JPEG o PNG.',
       }))
       event.target.value = ''
       return
@@ -596,15 +676,31 @@ export default function AlbumClient() {
       setUploadingSelectionId(selection.id)
       setUploadMessageBySelection((prev) => ({
         ...prev,
+        [selection.id]: 'Procesando imagen...',
+      }))
+
+      const optimizedFile = await compressImageIfNeeded(file)
+
+      if (optimizedFile.size > MAX_UPLOAD_SIZE_BYTES) {
+        setUploadMessageBySelection((prev) => ({
+          ...prev,
+          [selection.id]: 'La imagen supera el tamaño permitido. El archivo debe ser máximo de 512 Kb.',
+        }))
+        event.target.value = ''
+        return
+      }
+
+      setUploadMessageBySelection((prev) => ({
+        ...prev,
         [selection.id]: 'Subiendo foto...',
       }))
 
-      const fileExt = file.name.split('.').pop() || 'jpg'
+      const fileExt = optimizedFile.name.split('.').pop() || 'jpg'
       const filePath = `${tenantId}/${currentUserId}/${selection.id}/foto-${Date.now()}.${fileExt.toLowerCase()}`
 
       const { error: uploadError } = await supabase.storage
         .from(UPLOAD_BUCKET)
-        .upload(filePath, file, {
+        .upload(filePath, optimizedFile, {
           cacheControl: '3600',
           upsert: true,
         })
@@ -663,10 +759,14 @@ export default function AlbumClient() {
       }))
     } catch (error) {
       console.error('Error cargando la foto de la selección:', error)
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : 'No fue posible cargar la foto. Verifica la tabla user_selection_photos y el bucket album-uploads.'
+
       setUploadMessageBySelection((prev) => ({
         ...prev,
-        [selection.id]:
-          'No fue posible cargar la foto. Verifica la tabla user_selection_photos y el bucket album-uploads.',
+        [selection.id]: errorMessage,
       }))
     } finally {
       setUploadingSelectionId(null)
@@ -1360,11 +1460,15 @@ export default function AlbumClient() {
                               <input
                                 id={`upload-${currentSelection.id}`}
                                 type="file"
-                                accept="image/*"
+                                accept="image/jpeg,image/jpg,image/png"
                                 className="hidden"
                                 onChange={(event) => handleSelectionPhotoUpload(currentSelection, event)}
                                 disabled={uploadingSelectionId === currentSelection.id}
                               />
+
+                              <p className="mt-2 text-xs font-medium text-slate-500">
+                                Formatos permitidos: JPG, JPEG o PNG. Tamaño máximo final: 512 Kb.
+                              </p>
 
                               {uploadMessageBySelection[currentSelection.id] ? (
                                 <p className="mt-3 text-sm font-semibold text-slate-700">
