@@ -1,116 +1,155 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase/client'
-
-type Tenant = {
-  id: string
-  nit: string
-}
 
 export default function LoginPage() {
   const router = useRouter()
 
+  const [nit, setNit] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [tenants, setTenants] = useState<Tenant[]>([])
-  const [selectedTenant, setSelectedTenant] = useState('')
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(false)
-  const [loadingTenants, setLoadingTenants] = useState(true)
   const [recoverMode, setRecoverMode] = useState(false)
 
-  useEffect(() => {
-    loadTenants()
-  }, [])
-
-  async function loadTenants() {
-    const { data, error } = await supabase
-      .from('tenants')
-      .select('id, nit')
-      .order('nit', { ascending: true })
-
-    if (!error && data) {
-      setTenants(data)
-    }
-
-    setLoadingTenants(false)
+  function handleNitChange(value: string) {
+    // Permitir solo números
+    const numericValue = value.replace(/\D/g, '')
+    setNit(numericValue)
   }
 
   async function handleLogin(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
 
-    if (!selectedTenant) {
-      setMessage('Debes seleccionar una empresa')
+    const nitLimpio = nit.trim()
+    const emailLimpio = email.trim().toLowerCase()
+
+    if (!nitLimpio) {
+      setMessage('Debes ingresar el NIT de la empresa')
+      return
+    }
+
+    if (!emailLimpio) {
+      setMessage('Debes ingresar tu correo')
+      return
+    }
+
+    if (!password) {
+      setMessage('Debes ingresar tu contraseña')
       return
     }
 
     setLoading(true)
     setMessage('')
 
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    })
+    // Buscar tenant por NIT
+    const { data: tenantData, error: tenantError } = await supabase
+      .from('tenants')
+      .select('id, nit')
+      .eq('nit', nitLimpio)
+      .maybeSingle()
 
-    if (error) {
-      setMessage(error.message)
+    if (tenantError) {
+      setMessage('Error consultando la empresa')
       setLoading(false)
       return
     }
 
+    if (!tenantData) {
+      setMessage('El NIT ingresado no existe')
+      setLoading(false)
+      return
+    }
+
+    // Login usuario
+    const { error: loginError } = await supabase.auth.signInWithPassword({
+      email: emailLimpio,
+      password,
+    })
+
+    if (loginError) {
+      setMessage('Correo o contraseña incorrectos')
+      setLoading(false)
+      return
+    }
+
+    // Obtener usuario autenticado
     const {
       data: { user },
+      error: userError,
     } = await supabase.auth.getUser()
 
-    const { data: userRow } = await supabase
+    if (userError || !user) {
+      setMessage('No fue posible obtener el usuario autenticado')
+      setLoading(false)
+      return
+    }
+
+    // Validar tenant del usuario
+    const { data: userRow, error: profileError } = await supabase
       .from('users')
       .select('tenant_id, role_id')
-      .eq('id', user?.id)
-      .single()
+      .eq('id', user.id)
+      .maybeSingle()
+
+    if (profileError) {
+      setMessage('Error validando el perfil del usuario')
+      setLoading(false)
+      return
+    }
 
     if (!userRow) {
+      await supabase.auth.signOut()
       setMessage('Usuario sin perfil asignado. Contacte al administrador.')
       setLoading(false)
       return
     }
 
-    if (userRow.tenant_id !== selectedTenant) {
-      setMessage('Este usuario no pertenece a la empresa seleccionada')
+    if (userRow.tenant_id !== tenantData.id) {
+      await supabase.auth.signOut()
+      setMessage('El usuario no pertenece a la empresa indicada por el NIT')
       setLoading(false)
       return
     }
 
-    if (
-      userRow.role_id === 1 ||
-      userRow.role_id === '1' ||
-      userRow.role_id === 'admin'
-    ) {
+    // Redirección por rol
+    const roleId = String(userRow.role_id)
+
+    if (roleId === '1' || roleId === 'admin') {
       router.push('/admin')
     } else {
       router.push('/album')
     }
 
     router.refresh()
+    setLoading(false)
   }
 
   async function handleRecoverPassword() {
-    if (!email) {
+    const emailLimpio = email.trim().toLowerCase()
+
+    if (!emailLimpio) {
       setMessage('Ingresa tu correo para recuperar la contraseña')
       return
     }
 
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    setLoading(true)
+    setMessage('')
+
+    const { error } = await supabase.auth.resetPasswordForEmail(emailLimpio, {
       redirectTo: window.location.origin + '/reset-password',
     })
 
     if (error) {
-      setMessage(error.message)
+      setMessage('Error sending recovery email')
+      setLoading(false)
       return
     }
 
     setMessage('Te enviamos un enlace para recuperar tu contraseña')
+    setLoading(false)
   }
 
   return (
@@ -121,26 +160,25 @@ export default function LoginPage() {
       >
         <h1 className="text-2xl font-bold">Ingreso al Álbum Digital</h1>
 
+        {/* NIT */}
         <div className="mt-4">
           <label className="mb-1 block text-sm font-semibold">
-            Empresa (NIT)
+            NIT de la empresa
           </label>
 
-          <select
-            value={selectedTenant}
-            onChange={(e) => setSelectedTenant(e.target.value)}
+          <input
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            maxLength={12}
             className="w-full rounded-md border p-2"
-          >
-            <option value="">Selecciona una empresa</option>
-
-            {tenants.map((tenant) => (
-              <option key={tenant.id} value={tenant.id}>
-                {tenant.nit}
-              </option>
-            ))}
-          </select>
+            value={nit}
+            onChange={(e) => handleNitChange(e.target.value)}
+            placeholder="Ej: 900123456"
+          />
         </div>
 
+        {/* EMAIL */}
         <div className="mt-4">
           <label className="mb-1 block text-sm font-semibold">
             Correo
@@ -155,6 +193,7 @@ export default function LoginPage() {
           />
         </div>
 
+        {/* PASSWORD */}
         {!recoverMode && (
           <div className="mt-4">
             <label className="mb-1 block text-sm font-semibold">
@@ -171,11 +210,12 @@ export default function LoginPage() {
           </div>
         )}
 
+        {/* BOTÓN PRINCIPAL */}
         {!recoverMode ? (
           <button
             type="submit"
-            disabled={loading || loadingTenants}
-            className="mt-6 w-full rounded-md bg-blue-600 p-2 text-white"
+            disabled={loading}
+            className="mt-6 w-full rounded-md bg-blue-600 p-2 text-white disabled:opacity-70"
           >
             {loading ? 'Ingresando...' : 'Ingresar'}
           </button>
@@ -183,15 +223,20 @@ export default function LoginPage() {
           <button
             type="button"
             onClick={handleRecoverPassword}
-            className="mt-6 w-full rounded-md bg-orange-500 p-2 text-white"
+            disabled={loading}
+            className="mt-6 w-full rounded-md bg-orange-500 p-2 text-white disabled:opacity-70"
           >
-            Enviar enlace de recuperación
+            {loading ? 'Enviando...' : 'Enviar enlace de recuperación'}
           </button>
         )}
 
+        {/* LINK RECUPERAR */}
         <button
           type="button"
-          onClick={() => setRecoverMode(!recoverMode)}
+          onClick={() => {
+            setRecoverMode(!recoverMode)
+            setMessage('')
+          }}
           className="mt-4 text-sm text-blue-600 underline"
         >
           {recoverMode
@@ -199,6 +244,7 @@ export default function LoginPage() {
             : '¿Olvidaste tu contraseña?'}
         </button>
 
+        {/* MENSAJES */}
         {message && (
           <p className="mt-4 text-sm text-red-600">{message}</p>
         )}
