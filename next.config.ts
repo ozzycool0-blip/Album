@@ -13,6 +13,10 @@ const nextConfig: NextConfig = {
         hostname: 'ixjgeffkmxikmqhflguw.supabase.co',
         pathname: '/storage/v1/object/public/album-uploads/**',
       },
+      {
+        protocol: 'https',
+        hostname: '**.r2.dev',
+      },
     ],
   },
 }

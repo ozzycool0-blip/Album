@@ -366,7 +366,7 @@ function getSelectionShield(selection: Selection, index: number) {
 const INTRO_SELECTION_ORDER = 0
 const INTRO_SELECTION_NAME = 'Indicaciones de llenado'
 const USER_PHOTOS_TABLE = 'user_selection_photos'
-const UPLOAD_BUCKET = 'album-uploads'
+const R2_SIGN_ROUTE = '/api/r2/upload-url'
 const USER_STICKER_PLACEMENTS_TABLE = 'user_sticker_placements'
 const MAX_UPLOAD_SIZE_BYTES = 1 * 512 * 512
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png']
@@ -661,7 +661,14 @@ export default function AlbumClient() {
   ) {
     const file = event.target.files?.[0]
 
-    if (!file || !currentUserId || !tenantId) return
+    if (!file || !currentUserId || !tenantId) {
+      setUploadMessageBySelection((prev) => ({
+        ...prev,
+        [selection.id]: 'Faltan datos del usuario o del archivo para realizar la carga.',
+      }))
+      event.target.value = ''
+      return
+    }
 
     if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
       setUploadMessageBySelection((prev) => ({
@@ -692,24 +699,62 @@ export default function AlbumClient() {
 
       setUploadMessageBySelection((prev) => ({
         ...prev,
+        [selection.id]: 'Generando URL de carga...',
+      }))
+
+      const fileExt =
+        optimizedFile.name.split('.').pop()?.toLowerCase() ||
+        (optimizedFile.type === 'image/png' ? 'png' : 'jpg')
+
+      const signResponse = await fetch(R2_SIGN_ROUTE, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          tenantId,
+          userId: currentUserId,
+          selectionId: selection.id,
+          fileExt,
+          contentType: optimizedFile.type,
+        }),
+      })
+
+      const signPayload = await signResponse.json()
+
+      if (!signResponse.ok) {
+        const debugInfo = signPayload?.debug
+          ? ` Debug: ${JSON.stringify(signPayload.debug)}`
+          : ''
+        throw new Error(
+          (signPayload?.error || 'No fue posible preparar la carga del archivo en Cloudflare R2.') +
+            debugInfo
+        )
+      }
+
+      const uploadUrl = signPayload?.uploadUrl as string | undefined
+      const publicUrl = signPayload?.publicUrl as string | undefined
+
+      if (!uploadUrl || !publicUrl) {
+        throw new Error('La respuesta del endpoint de carga llegó incompleta.')
+      }
+
+      setUploadMessageBySelection((prev) => ({
+        ...prev,
         [selection.id]: 'Subiendo foto...',
       }))
 
-      const fileExt = optimizedFile.name.split('.').pop() || 'jpg'
-      const filePath = `${tenantId}/${currentUserId}/${selection.id}/foto-${Date.now()}.${fileExt.toLowerCase()}`
+      const uploadResponse = await fetch(uploadUrl, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': optimizedFile.type,
+        },
+        body: optimizedFile,
+      })
 
-      const { error: uploadError } = await supabase.storage
-        .from(UPLOAD_BUCKET)
-        .upload(filePath, optimizedFile, {
-          cacheControl: '3600',
-          upsert: true,
-        })
-
-      if (uploadError) throw uploadError
-
-      const {
-        data: { publicUrl },
-      } = supabase.storage.from(UPLOAD_BUCKET).getPublicUrl(filePath)
+      if (!uploadResponse.ok) {
+        throw new Error('No fue posible cargar la imagen en Cloudflare R2.')
+      }
 
       const existingRecord = userSelectionPhotos[selection.id]
 
@@ -762,7 +807,7 @@ export default function AlbumClient() {
       const errorMessage =
         error instanceof Error
           ? error.message
-          : 'No fue posible cargar la foto. Verifica la tabla user_selection_photos y el bucket album-uploads.'
+          : 'No fue posible cargar la foto. Verifica la tabla user_selection_photos y la configuración de Cloudflare R2.'
 
       setUploadMessageBySelection((prev) => ({
         ...prev,
