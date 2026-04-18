@@ -4,25 +4,6 @@ import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import { NextResponse } from 'next/server'
 
-const accountId = process.env.CLOUDFLARE_R2_ACCOUNT_ID
-const accessKeyId = process.env.CLOUDFLARE_R2_ACCESS_KEY_ID
-const secretAccessKey = process.env.CLOUDFLARE_R2_SECRET_ACCESS_KEY
-const bucketName = process.env.CLOUDFLARE_R2_BUCKET_NAME
-const publicBaseUrl = process.env.CLOUDFLARE_R2_PUBLIC_BASE_URL
-
-if (!accountId || !accessKeyId || !secretAccessKey || !bucketName || !publicBaseUrl) {
-  throw new Error('Faltan variables de entorno de Cloudflare R2')
-}
-
-const s3 = new S3Client({
-  region: 'auto',
-  endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
-  credentials: {
-    accessKeyId,
-    secretAccessKey,
-  },
-})
-
 type UploadUrlRequestBody = {
   tenantId: string
   userId: string
@@ -33,6 +14,19 @@ type UploadUrlRequestBody = {
 
 export async function POST(req: Request) {
   try {
+    const accountId = process.env.CLOUDFLARE_R2_ACCOUNT_ID
+    const accessKeyId = process.env.CLOUDFLARE_R2_ACCESS_KEY_ID
+    const secretAccessKey = process.env.CLOUDFLARE_R2_SECRET_ACCESS_KEY
+    const bucketName = process.env.CLOUDFLARE_R2_BUCKET_NAME
+    const publicBaseUrl = process.env.CLOUDFLARE_R2_PUBLIC_BASE_URL
+
+    if (!accountId || !accessKeyId || !secretAccessKey || !bucketName || !publicBaseUrl) {
+      return NextResponse.json(
+        { error: 'Faltan variables de entorno de Cloudflare R2 en el servidor' },
+        { status: 500 }
+      )
+    }
+
     const body = (await req.json()) as Partial<UploadUrlRequestBody>
 
     const tenantId = body.tenantId?.trim()
@@ -57,6 +51,15 @@ export async function POST(req: Request) {
       )
     }
 
+    const s3 = new S3Client({
+      region: 'auto',
+      endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
+      credentials: {
+        accessKeyId,
+        secretAccessKey,
+      },
+    })
+
     const safeExt = fileExt.toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg'
     const key = `${tenantId}/${userId}/${selectionId}/foto-${Date.now()}.${safeExt}`
 
@@ -66,7 +69,7 @@ export async function POST(req: Request) {
       ContentType: contentType,
     })
 
-    const uploadUrl = await getSignedUrl(s3, command, { expiresIn: 60 })
+    const uploadUrl = await getSignedUrl(s3, command, { expiresIn: 300 })
     const publicUrl = `${publicBaseUrl}/${key}`
 
     return NextResponse.json({ uploadUrl, publicUrl })
