@@ -115,7 +115,7 @@ function isIntroSelection(selection: SelectionRow) {
   )
 }
 
-export default function AdminPagePaniniV3() {
+export default function AdminPagePaniniV4() {
   const [sessionChecked, setSessionChecked] = useState(false)
   const [loadingPage, setLoadingPage] = useState(true)
   const [tenantId, setTenantId] = useState('')
@@ -131,8 +131,7 @@ export default function AdminPagePaniniV3() {
   const [selectedUserId, setSelectedUserId] = useState('')
   const [globalMessage, setGlobalMessage] = useState('')
   const [loadingAction, setLoadingAction] = useState(false)
-  const [sendingAllUsers, setSendingAllUsers] = useState(false)
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'usuarios' | 'sobres' | 'control'>('dashboard')
+    const [activeTab, setActiveTab] = useState<'dashboard' | 'usuarios' | 'sobres' | 'control'>('dashboard')
 
   const [newUserName, setNewUserName] = useState('')
   const [newUserEmail, setNewUserEmail] = useState('')
@@ -140,7 +139,8 @@ export default function AdminPagePaniniV3() {
   const [creatingUser, setCreatingUser] = useState(false)
   const [createUserMessage, setCreateUserMessage] = useState('')
 
-  const [packSize, setPackSize] = useState('3')
+  const [selectedQuickSendUserIds, setSelectedQuickSendUserIds] = useState<string[]>([])
+const [selectedDeleteUserId, setSelectedDeleteUserId] = useState('')
   const [dashboardPage, setDashboardPage] = useState(1)
 
   async function checkAdminAccess() {
@@ -270,9 +270,17 @@ export default function AdminPagePaniniV3() {
     }
   }, [sessionChecked, tenantId])
 
+  const sortedUsers = useMemo(() => {
+    return [...users].sort((a, b) => {
+      const aLabel = (a.full_name || a.email || '').toLocaleLowerCase('es-CO')
+      const bLabel = (b.full_name || b.email || '').toLocaleLowerCase('es-CO')
+      return aLabel.localeCompare(bLabel, 'es-CO')
+    })
+  }, [users])
+
   const selectedUser = useMemo(
-    () => users.find((user) => user.id === selectedUserId) || null,
-    [users, selectedUserId]
+    () => sortedUsers.find((user) => user.id === selectedUserId) || null,
+    [sortedUsers, selectedUserId]
   )
 
   const stickerById = useMemo(() => {
@@ -303,7 +311,7 @@ export default function AdminPagePaniniV3() {
   }, [placements])
 
   const userProgressRows = useMemo(() => {
-    return users.map((user) => {
+    return sortedUsers.map((user) => {
       const issuedStickerIds = new Set(
         issuedStickers
           .filter((item) => item.user_id === user.id)
@@ -376,7 +384,7 @@ export default function AdminPagePaniniV3() {
         completedSelections,
       }
     })
-  }, [users, issuedStickers, placements, totalStickers, totalSelections, selections, stickersBySelection, userSelectionPhotos])
+  }, [sortedUsers, issuedStickers, placements, totalStickers, totalSelections, selections, stickersBySelection, userSelectionPhotos])
 
   const totalDashboardPages = useMemo(() => {
     return Math.max(1, Math.ceil(userProgressRows.length / USERS_PER_PAGE))
@@ -524,6 +532,48 @@ export default function AdminPagePaniniV3() {
     window.URL.revokeObjectURL(url)
   }
 
+  function handleDownloadActiveUsersCsv() {
+    const headers = [
+      'Nombre',
+      'Correo',
+      'Selecciones completas',
+      'Pegadas',
+      'Emitidas',
+      'Progreso (%)',
+    ]
+
+    const escapeCsvValue = (value: string | number) => {
+      const safeValue = String(value ?? '')
+      return `"${safeValue.replace(/"/g, '""')}"`
+    }
+
+    const rows = userProgressRows.map((row) => [
+      row.full_name || '—',
+      row.email,
+      row.completedSelections,
+      row.placedCount,
+      row.issuedCount,
+      row.progressPercent,
+    ])
+
+    const csvContent = [headers, ...rows]
+      .map((line) => line.map(escapeCsvValue).join(','))
+      .join('\n')
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    const date = new Date().toISOString().slice(0, 10)
+
+    link.href = url
+    link.setAttribute('download', `usuarios_activos_${tenantName || 'tenant'}_${date}.csv`)
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(url)
+  }
+
+
   async function refreshAfterAction(message?: string) {
     await loadAdminData(tenantId)
     if (message) setGlobalMessage(message)
@@ -630,33 +680,40 @@ export default function AdminPagePaniniV3() {
   }
 
   async function handleSendSinglePack() {
-    if (!selectedUserId) {
-      setGlobalMessage('Selecciona un usuario.')
+    if (selectedQuickSendUserIds.length === 0) {
+      setGlobalMessage('Selecciona al menos un usuario.')
       return
     }
 
     setLoadingAction(true)
+    setGlobalMessage('')
+
     try {
-      await sendPackToUser(selectedUserId, Number(packSize))
+      for (const userId of selectedQuickSendUserIds) {
+        await sendPackToUser(userId, 4)
+      }
+      await refreshAfterAction('Sobres de 4 láminas enviados a los usuarios seleccionados.')
     } finally {
       setLoadingAction(false)
     }
   }
 
   async function handleSendPackToAllUsers() {
-    setSendingAllUsers(true)
+    if (sortedUsers.length === 0) {
+      setGlobalMessage('No hay usuarios activos para enviar sobres.')
+      return
+    }
+
+    setLoadingAction(true)
     setGlobalMessage('')
 
     try {
-      for (const user of users) {
-        await sendPackToUser(user.id, Number(packSize))
+      for (const user of sortedUsers) {
+        await sendPackToUser(user.id, 4)
       }
-      await refreshAfterAction('Se enviaron sobres a todos los usuarios del tenant.')
-    } catch (error) {
-      console.error(error)
-      setGlobalMessage('Ocurrió un error enviando sobres masivos.')
+      await refreshAfterAction('Se envió 1 sobre de 4 láminas a todos los usuarios.')
     } finally {
-      setSendingAllUsers(false)
+      setLoadingAction(false)
     }
   }
 
@@ -670,113 +727,44 @@ export default function AdminPagePaniniV3() {
 
     setLoadingAction(true)
     try {
-      const userPackIds = packs.filter((pack) => pack.user_id === userId).map((pack) => pack.id)
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
 
-      const { error: placementsError } = await supabase
-        .from('user_sticker_placements')
-        .delete()
-        .eq('user_id', userId)
+      const accessToken = session?.access_token
 
-      if (placementsError) throw placementsError
+      const res = await fetch('/api/admin/delete-user-complete', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        },
+        body: JSON.stringify({ user_id: userId, tenant_id: tenantId }),
+      })
 
-      const { error: photosError } = await supabase
-        .from(USER_PHOTOS_TABLE)
-        .delete()
-        .eq('user_id', userId)
+      const data = await res.json()
 
-      if (photosError) throw photosError
-
-      const { error: issuedError } = await supabase
-        .from('issued_stickers')
-        .delete()
-        .eq('user_id', userId)
-
-      if (issuedError) throw issuedError
-
-      if (userPackIds.length > 0) {
-        const { error: packsError } = await supabase
-          .from('sticker_packs')
-          .delete()
-          .in('id', userPackIds)
-
-        if (packsError) throw packsError
+      if (!res.ok) {
+        throw new Error(data.error || 'No fue posible eliminar el usuario.')
       }
-
-      const { error: userError } = await supabase
-        .from('users')
-        .delete()
-        .eq('id', userId)
-        .eq('tenant_id', tenantId)
-
-      if (userError) throw userError
 
       if (selectedUserId === userId) {
         setSelectedUserId('')
       }
 
+      setSelectedDeleteUserId('')
+      setSelectedQuickSendUserIds((prev) => prev.filter((id) => id !== userId))
       await refreshAfterAction('Usuario eliminado correctamente.')
     } catch (error) {
       console.error(error)
-      setGlobalMessage('No fue posible eliminar el usuario.')
+      setGlobalMessage(error instanceof Error ? error.message : 'No fue posible eliminar el usuario.')
     } finally {
       setLoadingAction(false)
     }
   }
 
-  async function handleResetUserAlbum() {
-    if (!selectedUserId || !selectedUser) {
-      setGlobalMessage('Selecciona un usuario para reiniciar su álbum.')
-      return
-    }
 
-    const confirmed = window.confirm(
-      `Vas a reiniciar el álbum de ${selectedUser.email}. Se eliminarán sobres enviados, pegados y foto de selección del usuario.`
-    )
 
-    if (!confirmed) return
-
-    setLoadingAction(true)
-    try {
-      const userPackIds = packs.filter((pack) => pack.user_id === selectedUserId).map((pack) => pack.id)
-
-      const { error: placementsError } = await supabase
-        .from('user_sticker_placements')
-        .delete()
-        .eq('user_id', selectedUserId)
-
-      if (placementsError) throw placementsError
-
-      const { error: photosError } = await supabase
-        .from(USER_PHOTOS_TABLE)
-        .delete()
-        .eq('user_id', selectedUserId)
-
-      if (photosError) throw photosError
-
-      const { error: issuedError } = await supabase
-        .from('issued_stickers')
-        .delete()
-        .eq('user_id', selectedUserId)
-
-      if (issuedError) throw issuedError
-
-      if (userPackIds.length > 0) {
-        const { error: packsError } = await supabase
-          .from('sticker_packs')
-          .delete()
-          .in('id', userPackIds)
-
-        if (packsError) throw packsError
-      }
-
-      await refreshAfterAction(`El álbum de ${selectedUser.email} fue reiniciado.`)
-    } catch (error) {
-      console.error(error)
-      setGlobalMessage('No fue posible reiniciar el álbum del usuario.')
-    } finally {
-      setLoadingAction(false)
-    }
-  }
 
   if (!sessionChecked || loadingPage) {
     return (
@@ -794,13 +782,13 @@ export default function AdminPagePaniniV3() {
             <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
               <div>
                 <div className="inline-flex rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-black uppercase tracking-[0.2em] text-blue-100">
-                  Panel admin tipo Panini v3
+                  Panel admin tipo Panini v4
                 </div>
                 <h1 className="mt-3 text-3xl font-black tracking-tight text-white">
                   Administración local del tenant
                 </h1>
                 <p className="mt-2 max-w-3xl text-sm text-blue-100/90">
-                  Gestiona usuarios, sobres, progreso, faltantes, historial y reinicio del álbum de tu empresa.
+                  Gestiona usuarios, sobres, progreso, faltantes e historial de tu empresa.
                 </p>
                 <button
                   type="button"
@@ -876,7 +864,7 @@ export default function AdminPagePaniniV3() {
                 className="mt-4 w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-900 outline-none"
               >
                 <option value="">Selecciona un usuario</option>
-                {users.map((user) => (
+                {sortedUsers.map((user) => (
                   <option key={user.id} value={user.id}>
                     {user.full_name ? `${user.full_name} · ${user.email}` : user.email}
                   </option>
@@ -912,53 +900,73 @@ export default function AdminPagePaniniV3() {
               <h2 className="mt-2 text-xl font-black text-slate-900">Envío rápido</h2>
 
               <div className="mt-4 space-y-3">
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="text-sm font-bold text-slate-700">Tamaño fijo del sobre</div>
+                  <div className="mt-1 text-lg font-black text-slate-900">4 láminas</div>
+                </div>
+
                 <div>
-                  <label className="mb-2 block text-sm font-bold text-slate-700">Tamaño del sobre</label>
-                  <select
-                    className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm font-semibold text-slate-900"
-                    value={packSize}
-                    onChange={(e) => setPackSize(e.target.value)}
-                  >
-                    <option value="3">3 láminas</option>
-                    <option value="4">4 láminas</option>
-                  </select>
+                  <label className="mb-2 block text-sm font-bold text-slate-700">
+                    Selecciona uno o más usuarios
+                  </label>
+                  <div className="max-h-64 space-y-2 overflow-y-auto rounded-2xl border border-slate-300 bg-white p-3">
+                    {sortedUsers.length > 0 ? (
+                      sortedUsers.map((user) => {
+                        const checked = selectedQuickSendUserIds.includes(user.id)
+                        return (
+                          <label
+                            key={user.id}
+                            className="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 px-3 py-2 hover:bg-slate-50"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={(e) => {
+                                const isChecked = e.target.checked
+                                setSelectedQuickSendUserIds((prev) =>
+                                  isChecked
+                                    ? [...prev, user.id].sort((a, b) => {
+                                        const userA = sortedUsers.find((item) => item.id === a)
+                                        const userB = sortedUsers.find((item) => item.id === b)
+                                        const labelA = (userA?.full_name || userA?.email || '').toLocaleLowerCase('es-CO')
+                                        const labelB = (userB?.full_name || userB?.email || '').toLocaleLowerCase('es-CO')
+                                        return labelA.localeCompare(labelB, 'es-CO')
+                                      })
+                                    : prev.filter((id) => id !== user.id)
+                                )
+                              }}
+                              className="mt-1 h-4 w-4 rounded border-slate-300"
+                            />
+                            <span className="text-sm font-semibold text-slate-800">
+                              {user.full_name ? `${user.full_name} · ${user.email}` : user.email}
+                            </span>
+                          </label>
+                        )
+                      })
+                    ) : (
+                      <div className="text-sm text-slate-500">No hay usuarios activos para enviar sobres.</div>
+                    )}
+                  </div>
                 </div>
 
                 <button
                   type="button"
-                  disabled={loadingAction || !selectedUserId}
+                  disabled={loadingAction || selectedQuickSendUserIds.length === 0}
                   onClick={handleSendSinglePack}
                   className="w-full rounded-2xl bg-[linear-gradient(135deg,#0f172a,#1d4ed8)] px-4 py-3 text-sm font-black text-white shadow-lg transition hover:brightness-110 disabled:opacity-50"
                 >
-                  {loadingAction ? 'Enviando...' : 'Enviar sobre al usuario'}
+                  {loadingAction ? 'Enviando...' : 'Enviar sobre de 4 láminas'}
                 </button>
 
                 <button
                   type="button"
-                  disabled={sendingAllUsers || users.length === 0}
+                  disabled={loadingAction || sortedUsers.length === 0}
                   onClick={handleSendPackToAllUsers}
                   className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-black text-slate-800 transition hover:bg-slate-50 disabled:opacity-50"
                 >
-                  {sendingAllUsers ? 'Enviando sobres...' : 'Enviar sobre a todos'}
+                  {loadingAction ? 'Enviando...' : 'Enviar 1 sobre a todos los usuarios'}
                 </button>
               </div>
-            </div>
-
-            <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
-              <div className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">Control</div>
-              <h2 className="mt-2 text-xl font-black text-slate-900">Acciones de riesgo</h2>
-              <p className="mt-2 text-sm text-slate-600">
-                Usa esta opción solo si necesitas reiniciar el álbum completo de un usuario.
-              </p>
-
-              <button
-                type="button"
-                disabled={loadingAction || !selectedUserId}
-                onClick={handleResetUserAlbum}
-                className="mt-4 w-full rounded-2xl bg-red-600 px-4 py-3 text-sm font-black text-white shadow transition hover:bg-red-700 disabled:opacity-50"
-              >
-                Reiniciar álbum del usuario
-              </button>
             </div>
           </aside>
 
@@ -1158,6 +1166,36 @@ export default function AdminPagePaniniV3() {
                     </button>
                   </form>
 
+                  <div className="mt-6 border-t border-slate-200 pt-6">
+                    <div className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">Borrar usuarios</div>
+                    <h3 className="mt-2 text-lg font-black text-slate-900">Eliminar usuario</h3>
+                    <p className="mt-2 text-sm text-slate-600">
+                      Selecciona un usuario para borrarlo completamente de la plataforma.
+                    </p>
+
+                    <select
+                      value={selectedDeleteUserId}
+                      onChange={(e) => setSelectedDeleteUserId(e.target.value)}
+                      className="mt-4 w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-900 outline-none"
+                    >
+                      <option value="">Selecciona un usuario</option>
+                      {sortedUsers.map((user) => (
+                        <option key={user.id} value={user.id}>
+                          {user.full_name ? `${user.full_name} · ${user.email}` : user.email}
+                        </option>
+                      ))}
+                    </select>
+
+                    <button
+                      type="button"
+                      disabled={loadingAction || !selectedDeleteUserId}
+                      onClick={() => handleDeleteUser(selectedDeleteUserId)}
+                      className="mt-4 w-full rounded-2xl bg-red-600 px-4 py-3 text-sm font-black text-white shadow transition hover:bg-red-700 disabled:opacity-50"
+                    >
+                      {loadingAction ? 'Eliminando usuario...' : 'Borrar usuario completamente'}
+                    </button>
+                  </div>
+
                   {createUserMessage ? (
                     <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700">
                       {createUserMessage}
@@ -1166,8 +1204,19 @@ export default function AdminPagePaniniV3() {
                 </div>
 
                 <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
-                  <div className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">Listado</div>
-                  <h2 className="mt-2 text-xl font-black text-slate-900">Usuarios del tenant</h2>
+                  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                    <div>
+                      <div className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">Listado</div>
+                      <h2 className="mt-2 text-xl font-black text-slate-900">Usuarios activos en la plataforma</h2>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleDownloadActiveUsersCsv}
+                      className="rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-black text-slate-800 transition hover:bg-slate-50"
+                    >
+                      Descargar reporte de usuarios activos
+                    </button>
+                  </div>
 
                   <div className="mt-5 overflow-x-auto">
                     <table className="min-w-full text-sm">
@@ -1179,7 +1228,6 @@ export default function AdminPagePaniniV3() {
                           <th className="pb-3 pr-4 font-black text-slate-700">Pegadas</th>
                           <th className="pb-3 pr-4 font-black text-slate-700">Emitidas</th>
                           <th className="pb-3 pr-4 font-black text-slate-700">% avance</th>
-                          <th className="pb-3 pr-4 font-black text-slate-700">Acciones</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1191,25 +1239,6 @@ export default function AdminPagePaniniV3() {
                             <td className="py-3 pr-4 font-semibold text-slate-800">{user.placedCount}</td>
                             <td className="py-3 pr-4 font-semibold text-slate-800">{user.issuedCount}</td>
                             <td className="py-3 pr-4 font-semibold text-slate-800">{user.progressPercent}%</td>
-                            <td className="py-3 pr-4">
-                              <div className="flex flex-wrap gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() => setSelectedUserId(user.id)}
-                                  className="rounded-lg border border-slate-300 bg-white px-3 py-1 text-xs font-black text-slate-700 hover:bg-slate-50"
-                                >
-                                  Ver
-                                </button>
-                                <button
-                                  type="button"
-                                  disabled={loadingAction}
-                                  onClick={() => handleDeleteUser(user.id)}
-                                  className="rounded-lg bg-red-500 px-3 py-1 text-xs font-black text-white hover:bg-red-600 disabled:opacity-50"
-                                >
-                                  Eliminar
-                                </button>
-                              </div>
-                            </td>
                           </tr>
                         ))}
                       </tbody>
