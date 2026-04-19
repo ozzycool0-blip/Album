@@ -1,7 +1,7 @@
 
 'use client'
 
-import { ChangeEvent, DragEvent, useEffect, useMemo, useState } from 'react'
+import { ChangeEvent, DragEvent, useEffect, useMemo, useRef, useState } from 'react'
 import Image from 'next/image'
 import { supabase } from '@/lib/supabase/client'
 
@@ -79,6 +79,15 @@ type IntroReferenceImage = {
   title: string
   description?: string
 }
+
+type FlyingStickerState = {
+  sticker: Sticker
+  startX: number
+  startY: number
+  endX: number
+  endY: number
+}
+
 
 type SelectionTheme = {
   accent: string
@@ -454,16 +463,34 @@ export default function AlbumClient() {
   const [panelFilter, setPanelFilter] = useState<'all'>('all')
   const [savingPlacement, setSavingPlacement] = useState(false)
   const [isPegadoPanelCollapsed, setIsPegadoPanelCollapsed] = useState(false)
-  const [isMobile, setIsMobile] = useState(false)
-  const [selectedStickerId, setSelectedStickerId] = useState<string | null>(null)
-  const [isMobilePendingPanelOpen, setIsMobilePendingPanelOpen] = useState(false)
-  const [isMobileSelectionsOpen, setIsMobileSelectionsOpen] = useState(false)
-  const [stickerJustPlacedId, setStickerJustPlacedId] = useState<string | null>(null)
-  const [foilBurstStickerId, setFoilBurstStickerId] = useState<string | null>(null)
 
   const [userSelectionPhotos, setUserSelectionPhotos] = useState<Record<string, UserSelectionPhoto>>({})
   const [uploadingSelectionId, setUploadingSelectionId] = useState<string | null>(null)
   const [uploadMessageBySelection, setUploadMessageBySelection] = useState<Record<string, string>>({})
+  const [isMobile, setIsMobile] = useState(false)
+  const [selectedStickerId, setSelectedStickerId] = useState<string | null>(null)
+  const [isMobileStickerTrayOpen, setIsMobileStickerTrayOpen] = useState(false)
+  const [isMobileSelectionMenuOpen, setIsMobileSelectionMenuOpen] = useState(false)
+  const [lastPlacedStickerId, setLastPlacedStickerId] = useState<string | null>(null)
+  const [flyingSticker, setFlyingSticker] = useState<FlyingStickerState | null>(null)
+  const feedbackTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    const syncViewport = () => {
+      if (typeof window === 'undefined') return
+      const mobile = window.innerWidth < 1024
+      setIsMobile(mobile)
+      if (!mobile) {
+        setIsMobileStickerTrayOpen(false)
+        setIsMobileSelectionMenuOpen(false)
+        setSelectedStickerId(null)
+      }
+    }
+
+    syncViewport()
+    window.addEventListener('resize', syncViewport)
+    return () => window.removeEventListener('resize', syncViewport)
+  }, [])
 
   useEffect(() => {
     async function loadAlbum() {
@@ -559,44 +586,44 @@ export default function AlbumClient() {
     loadAlbum()
   }, [])
 
-  useEffect(() => {
-    const syncViewport = () => {
-      setIsMobile(window.innerWidth < 1024)
+  function showPanelMessage(message: string) {
+    setPanelMessage(message)
+
+    if (feedbackTimeoutRef.current) {
+      clearTimeout(feedbackTimeoutRef.current)
     }
 
-    syncViewport()
-    window.addEventListener('resize', syncViewport)
+    feedbackTimeoutRef.current = setTimeout(() => {
+      setPanelMessage((current) => (current === message ? '' : current))
+    }, 1800)
+  }
 
-    return () => window.removeEventListener('resize', syncViewport)
-  }, [])
-
-  useEffect(() => {
-    if (!isMobile) {
-      setIsMobilePendingPanelOpen(false)
-      setIsMobileSelectionsOpen(false)
-      setSelectedStickerId(null)
+  function triggerHapticFeedback(pattern: number | number[] = 45) {
+    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+      navigator.vibrate(pattern)
     }
-  }, [isMobile])
+  }
 
-  useEffect(() => {
-    if (!stickerJustPlacedId) return
+  function launchFlyingStickerAnimation(sticker: Sticker) {
+    if (typeof window === 'undefined' || typeof document === 'undefined') return
 
-    const timer = window.setTimeout(() => {
-      setStickerJustPlacedId((current) => (current === stickerJustPlacedId ? null : current))
-    }, 900)
+    const sourceEl = document.getElementById(`mobile-sticker-${sticker.id}`)
+    const targetEl = document.getElementById(`album-slot-${sticker.id}`)
 
-    return () => window.clearTimeout(timer)
-  }, [stickerJustPlacedId])
+    if (!sourceEl || !targetEl) return
 
-  useEffect(() => {
-    if (!foilBurstStickerId) return
+    const sourceRect = sourceEl.getBoundingClientRect()
+    const targetRect = targetEl.getBoundingClientRect()
 
-    const timer = window.setTimeout(() => {
-      setFoilBurstStickerId((current) => (current === foilBurstStickerId ? null : current))
-    }, 1150)
+    setFlyingSticker({
+      sticker,
+      startX: sourceRect.left + sourceRect.width / 2,
+      startY: sourceRect.top + sourceRect.height / 2,
+      endX: targetRect.left + targetRect.width / 2,
+      endY: targetRect.top + targetRect.height / 2,
+    })
+  }
 
-    return () => window.clearTimeout(timer)
-  }, [foilBurstStickerId])
 
   async function compressImageIfNeeded(file: File): Promise<File> {
     if (file.size <= MAX_UPLOAD_SIZE_BYTES) return file
@@ -989,25 +1016,48 @@ export default function AlbumClient() {
   useEffect(() => {
     if (pendingIssuedStickers.length === 0) {
       setIsPegadoPanelCollapsed(true)
+      setIsMobileStickerTrayOpen(false)
+      setSelectedStickerId(null)
     }
   }, [pendingIssuedStickers])
+
+  useEffect(() => {
+    if (!lastPlacedStickerId) return
+
+    const timeout = setTimeout(() => {
+      setLastPlacedStickerId((current) => (current === lastPlacedStickerId ? null : current))
+    }, 1400)
+
+    return () => clearTimeout(timeout)
+  }, [lastPlacedStickerId])
+
+  useEffect(() => {
+    if (!flyingSticker) return
+
+    const timeout = setTimeout(() => {
+      setFlyingSticker(null)
+    }, 520)
+
+    return () => clearTimeout(timeout)
+  }, [flyingSticker])
 
   const draggedSticker = draggedStickerId ? stickersById[draggedStickerId] ?? null : null
 
   async function placeSticker(stickerId: string, targetSticker: Sticker) {
-    if (!currentUserId || !tenantId) return
+    if (!currentUserId || !tenantId) return false
     const dragged = stickersById[stickerId]
 
-    if (!dragged) return
+    if (!dragged) return false
 
     if (placedStickerIds.has(stickerId)) {
-      setPanelMessage('Esta lámina ya estaba pegada.')
-      return
+      showPanelMessage('Esta lámina ya estaba pegada.')
+      return false
     }
 
     if (dragged.id !== targetSticker.id) {
-      setPanelMessage(`La lámina #${dragged.sticker_number} no corresponde a este espacio. Volvió al panel.`)
-      return
+      showPanelMessage(`⚠️ Espacio incorrecto. La lámina #${dragged.sticker_number} no corresponde aquí.`)
+      triggerHapticFeedback([25, 50, 25])
+      return false
     }
 
     try {
@@ -1027,15 +1077,14 @@ export default function AlbumClient() {
       if (error) throw error
 
       setPlacements((prev) => [...prev, data])
-      setStickerJustPlacedId(dragged.id)
-      setFoilBurstStickerId(dragged.id)
-      if (typeof window !== 'undefined' && 'vibrate' in navigator) {
-        navigator.vibrate?.([35, 25, 55])
-      }
-      setPanelMessage(`¡Perfecto! La lámina #${dragged.sticker_number} quedó pegada.`)
+      setLastPlacedStickerId(dragged.id)
+      showPanelMessage(`✨ ¡Perfecto! La lámina #${dragged.sticker_number} quedó pegada.`)
+      triggerHapticFeedback([35, 35, 60])
+      return true
     } catch (error) {
       console.error('Error pegando lámina:', error)
-      setPanelMessage('No fue posible pegar la lámina. Revisa la tabla user_sticker_placements.')
+      showPanelMessage('No fue posible pegar la lámina. Revisa la tabla user_sticker_placements.')
+      return false
     } finally {
       setSavingPlacement(false)
       setDraggedStickerId(null)
@@ -1095,34 +1144,37 @@ export default function AlbumClient() {
     await placeSticker(droppedStickerId, sticker)
   }
 
-  function handleMobileStickerSelect(stickerId: string) {
-    if (!isMobile) return
+  function handleSelectMobileSticker(stickerId: string) {
+    setSelectedStickerId(stickerId)
+    setIsMobileStickerTrayOpen(true)
+    const sticker = stickersById[stickerId]
 
-    setSelectedStickerId((prev) => {
-      const nextValue = prev === stickerId ? null : stickerId
-      const selectedSticker = nextValue ? stickersById[nextValue] : null
+    if (sticker) {
+      showPanelMessage(`Lámina #${sticker.sticker_number} lista. Ahora toca su espacio en el álbum.`)
+    }
+  }
 
-      if (selectedSticker) {
-        setPanelMessage(
-          `Lámina #${selectedSticker.sticker_number} seleccionada. Ahora toca el espacio correcto del álbum.`
-        )
-      } else {
-        setPanelMessage('Selección de lámina cancelada.')
+  async function handleMobileStickerPlacement(targetSticker: Sticker) {
+    if (!selectedStickerId) return
+
+    const selectedSticker = stickersById[selectedStickerId]
+
+    if (!selectedSticker) return
+
+    if (selectedSticker.id === targetSticker.id) {
+      launchFlyingStickerAnimation(selectedSticker)
+    }
+
+    const success = await placeSticker(selectedStickerId, targetSticker)
+
+    if (success) {
+      setSelectedStickerId(null)
+
+      const remaining = pendingIssuedStickers.length - 1
+      if (remaining <= 0) {
+        setIsMobileStickerTrayOpen(false)
       }
-
-      return nextValue
-    })
-  }
-
-  async function handleMobileCardTap(sticker: Sticker) {
-    if (!isMobile || !selectedStickerId) return
-    await placeSticker(selectedStickerId, sticker)
-    setIsMobilePendingPanelOpen(false)
-  }
-
-  function handleMobileSelectionChange(index: number) {
-    setCurrentSelectionIndex(index)
-    setIsMobileSelectionsOpen(false)
+    }
   }
 
   if (loading) {
@@ -1142,205 +1194,43 @@ export default function AlbumClient() {
   }
 
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top,#008445,#0f172a_42%,#020617)]">
-      <style jsx global>{`
-        @keyframes panini-bounce {
-          0% { transform: scale(0.9) rotate(-2deg); }
-          55% { transform: scale(1.045) rotate(0deg); }
-          100% { transform: scale(1) rotate(0deg); }
-        }
-
-        @keyframes panini-foil-sheen {
-          0% { transform: translateX(-140%) skewX(-22deg); opacity: 0; }
-          25% { opacity: 0.35; }
-          60% { opacity: 0.95; }
-          100% { transform: translateX(160%) skewX(-22deg); opacity: 0; }
-        }
-
-        @keyframes panini-burst-ring {
-          0% { transform: scale(0.55); opacity: 0.65; }
-          100% { transform: scale(1.55); opacity: 0; }
-        }
-
-        @keyframes panini-slot-pulse {
-          0%, 100% { box-shadow: 0 0 0 0 rgba(34,211,238,0.18); }
-          50% { box-shadow: 0 0 0 8px rgba(34,211,238,0.08); }
-        }
-
-        .panini-sticker-bounce {
-          animation: panini-bounce 480ms cubic-bezier(0.22, 1, 0.36, 1);
-        }
-
-        .panini-foil::after {
-          content: '';
-          position: absolute;
-          inset: -20%;
-          background: linear-gradient(115deg, rgba(255,255,255,0) 20%, rgba(255,255,255,0.2) 34%, rgba(255,255,255,0.9) 48%, rgba(255,255,255,0.18) 58%, rgba(255,255,255,0) 72%);
-          animation: panini-foil-sheen 900ms ease-out forwards;
-          pointer-events: none;
-          mix-blend-mode: screen;
-        }
-
-        .panini-burst-ring {
-          animation: panini-burst-ring 720ms ease-out forwards;
-        }
-
-        .panini-slot-pulse {
-          animation: panini-slot-pulse 1.1s ease-in-out infinite;
-        }
-      `}</style>
-      {isMobile && isMobileSelectionsOpen ? (
-        <div className="fixed inset-0 z-[60] bg-slate-950/70 backdrop-blur-sm" onClick={() => setIsMobileSelectionsOpen(false)}>
-          <div
-            className="absolute inset-x-0 bottom-0 max-h-[78vh] overflow-hidden rounded-t-[28px] border border-white/10 bg-slate-950 shadow-2xl"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
-              <div>
-                <div className="text-[11px] font-black uppercase tracking-[0.24em] text-emerald-200/70">Selecciones</div>
-                <div className="text-sm font-bold text-white">Navega tu álbum</div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsMobileSelectionsOpen(false)}
-                className="rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-[11px] font-black uppercase tracking-wide text-white"
-              >
-                Cerrar
-              </button>
-            </div>
-
-            <div className="max-h-[calc(78vh-72px)] overflow-y-auto p-3">
-              <div className="space-y-2">
-                {selections.map((selection, index) => {
-                  const isActive = index === currentSelectionIndex
-                  const stats = selectionStats.find((s) => s.selectionId === selection.id)
-
-                  return (
-                    <button
-                      key={selection.id}
-                      type="button"
-                      onClick={() => handleMobileSelectionChange(index)}
-                      className={`w-full rounded-2xl border px-3 py-3 text-left transition-all ${
-                        isActive
-                          ? 'border-[#008445]/60 bg-[linear-gradient(135deg,rgba(0,132,69,0.24),rgba(16,185,129,0.16),rgba(255,255,255,0.08))] shadow-[0_0_20px_rgba(0,132,69,0.18)]'
-                          : 'border-white/10 bg-white/[0.04]'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <div
-                            className={`flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.18em] ${
-                              isActive ? 'text-emerald-200' : 'text-emerald-200/60'
-                            }`}
-                          >
-                            <ShieldIcon />
-                            Selección {selection.number ?? index + 1}
-                          </div>
-                          <div className={`mt-1 line-clamp-2 text-[13px] font-black ${isActive ? 'text-white' : 'text-emerald-50'}`}>
-                            {selection.name}
-                          </div>
-                        </div>
-
-                        <div
-                          className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-black ${
-                            isActive ? 'bg-yellow-300 text-slate-950 shadow' : 'bg-slate-800 text-emerald-100'
-                          }`}
-                        >
-                          {stats?.missing ?? 0}
-                        </div>
-                      </div>
-
-                      <div className="mt-2.5 flex items-center justify-between gap-2">
-                        <span className={`rounded-full px-2.5 py-1 text-[11px] font-black ${getSelectionStatusBadge(stats?.status)}`}>
-                          {getSelectionStatusLabel(stats?.status)}
-                        </span>
-
-                        <span className="text-[11px] font-bold text-emerald-200/75">
-                          {stats?.obtained ?? 0}/{stats?.total ?? 0}
-                        </span>
-                      </div>
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
+    <main className="relative min-h-screen bg-[radial-gradient(circle_at_top,#008445,#0f172a_42%,#020617)] pb-24 lg:pb-0">
+      {panelMessage ? (
+        <div className="pointer-events-none fixed left-1/2 top-4 z-[80] -translate-x-1/2 px-4">
+          <div className="rounded-full border border-white/15 bg-slate-950/88 px-4 py-2 text-xs font-black text-white shadow-[0_12px_30px_rgba(15,23,42,0.45)] backdrop-blur-xl md:text-sm">
+            {panelMessage}
           </div>
         </div>
       ) : null}
 
-      {isMobile && isMobilePendingPanelOpen ? (
-        <div className="fixed inset-0 z-[70] bg-slate-950/70 backdrop-blur-sm" onClick={() => setIsMobilePendingPanelOpen(false)}>
-          <div
-            className="absolute inset-x-0 bottom-0 rounded-t-[28px] border border-white/10 bg-slate-950 shadow-2xl"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
-              <div>
-                <div className="text-[11px] font-black uppercase tracking-[0.24em] text-cyan-200">Panel táctil</div>
-                <div className="text-sm font-bold text-white">Láminas pendientes por pegar</div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsMobilePendingPanelOpen(false)}
-                className="rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-[11px] font-black uppercase tracking-wide text-white"
-              >
-                Cerrar
-              </button>
-            </div>
-
-            <div className="px-4 pb-4 pt-3">
-              <div className="mb-3 text-xs font-medium text-slate-300">
-                Toca una lámina para seleccionarla y luego toca su espacio correcto en el álbum.
-              </div>
-
-              <div className="flex gap-3 overflow-x-auto pb-2">
-                {visiblePendingStickers.length > 0 ? (
-                  visiblePendingStickers.map((sticker) => {
-                    const isSelected = selectedStickerId === sticker.id
-                    return (
-                      <button
-                        key={sticker.id}
-                        type="button"
-                        onClick={() => handleMobileStickerSelect(sticker.id)}
-                        className={`relative w-[96px] shrink-0 overflow-hidden rounded-[18px] border transition-all ${
-                          isSelected
-                            ? 'scale-[1.06] border-yellow-300 bg-[linear-gradient(180deg,#fffdf5,#fef3c7)] shadow-[0_18px_30px_rgba(250,204,21,0.28)]'
-                            : 'border-white/10 bg-[linear-gradient(180deg,#ffffff,#ecfeff)] shadow-[0_8px_18px_rgba(15,23,42,0.18)]'
-                        }`}
-                      >
-                        <div className="absolute right-1.5 top-1.5 z-10 rounded-full bg-slate-950/80 px-1.5 py-0.5 text-[9px] font-bold text-white shadow">
-                          #{sticker.sticker_number}
-                        </div>
-
-                        <div className="relative h-[118px] overflow-hidden bg-white">
-                          {sticker.art_asset_url ? (
-                            <Image src={sticker.art_asset_url} alt={sticker.name} fill className="object-cover" />
-                          ) : (
-                            <div className="flex h-full items-center justify-center px-2 text-center text-[10px] font-semibold text-slate-400">
-                              Sin imagen
-                            </div>
-                          )}
-                        </div>
-
-                        <div className="border-t border-slate-200 px-2 py-1.5 text-center text-[10px] font-black text-slate-700">
-                          {isSelected ? 'Lista para pegar' : 'Tocar'}
-                        </div>
-                      </button>
-                    )
-                  })
-                ) : (
-                  <div className="flex h-[110px] w-full items-center justify-center rounded-[20px] border border-dashed border-white/15 bg-white/[0.04] px-6 text-center text-xs font-medium text-slate-300">
-                    No tienes láminas pendientes por pegar.
-                  </div>
-                )}
-              </div>
-            </div>
+      {flyingSticker ? (
+        <div
+          className="pointer-events-none fixed z-[90] h-[96px] w-[76px] animate-[panini-fly_520ms_cubic-bezier(0.22,1,0.36,1)_forwards]"
+          style={
+            {
+              left: flyingSticker.startX - 38,
+              top: flyingSticker.startY - 48,
+              ['--panini-end-x' as string]: `${flyingSticker.endX - flyingSticker.startX}px`,
+              ['--panini-end-y' as string]: `${flyingSticker.endY - flyingSticker.startY}px`,
+            } as Record<string, string | number>
+          }
+        >
+          <div className="panini-flying-card relative h-full w-full overflow-hidden rounded-[18px] border border-yellow-300/70 bg-[linear-gradient(180deg,#fffef5,#fff7cc)] shadow-[0_18px_40px_rgba(15,23,42,0.35)]">
+            {flyingSticker.sticker.art_asset_url ? (
+              <Image
+                src={flyingSticker.sticker.art_asset_url}
+                alt={flyingSticker.sticker.name}
+                fill
+                className="object-cover"
+              />
+            ) : null}
+            <div className="absolute inset-0 bg-[linear-gradient(120deg,transparent_15%,rgba(255,255,255,0.85)_40%,transparent_65%)] opacity-90 animate-[panini-shimmer_520ms_linear_forwards]" />
           </div>
         </div>
       ) : null}
-      <div className="mx-auto max-w-[1700px] px-3 py-4 md:px-6 md:py-6">
-        <div className="grid gap-4 xl:grid-cols-[290px_minmax(0,1fr)] xl:gap-5">
-          <aside className="hidden xl:sticky xl:top-5 xl:block xl:h-[calc(100vh-2.5rem)]">
+      <div className="mx-auto max-w-[1700px] px-4 py-6 md:px-6">
+        <div className="grid gap-5 xl:grid-cols-[290px_minmax(0,1fr)]">
+          <aside className="hidden xl:sticky xl:top-5 xl:h-[calc(100vh-2.5rem)] xl:block">
             <div className="flex h-full flex-col overflow-hidden rounded-[24px] border border-[#008445]/30 bg-slate-950/75 shadow-[0_0_0_1px_rgba(255,255,255,0.05),0_20px_60px_rgba(2,8,23,0.6)] backdrop-blur-xl">
               <div className="relative overflow-hidden border-b border-white/10 bg-[linear-gradient(135deg,rgba(0,132,69,0.96),rgba(15,23,42,0.95)_65%,rgba(16,185,129,0.72))] p-4">
                 <div className="absolute -right-10 -top-10 h-32 w-32 rounded-full bg-white/10 blur-2xl" />
@@ -1461,50 +1351,125 @@ export default function AlbumClient() {
             </div>
           </aside>
 
-          <section className="min-w-0 pb-24 lg:pb-0">
-            <div className="space-y-3">
-              <div className="xl:hidden overflow-hidden rounded-[22px] border border-white/10 bg-slate-950/80 shadow-[0_18px_40px_rgba(2,8,23,0.45)] backdrop-blur-xl">
-                <div className="bg-[linear-gradient(135deg,rgba(0,132,69,0.96),rgba(15,23,42,0.95)_65%,rgba(16,185,129,0.72))] px-4 py-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="text-[11px] font-black uppercase tracking-[0.22em] text-emerald-100/80">Álbum HSEQ</div>
-                      <div className="mt-1 truncate text-lg font-black text-white">{companyName}</div>
-                      <div className="mt-1 truncate text-xs font-medium text-emerald-50">{userName || email}</div>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => setIsMobileSelectionsOpen(true)}
-                      className="rounded-full border border-white/15 bg-white/10 px-3 py-2 text-[11px] font-black uppercase tracking-wide text-white shadow"
-                    >
-                      Selecciones
-                    </button>
+          {isMobile && isMobileSelectionMenuOpen ? (
+            <div className="fixed inset-0 z-[70] bg-slate-950/70 backdrop-blur-sm xl:hidden">
+              <div className="absolute inset-x-3 top-4 bottom-4 overflow-hidden rounded-[28px] border border-white/10 bg-slate-950 shadow-[0_24px_60px_rgba(2,8,23,0.55)]">
+                <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
+                  <div>
+                    <div className="text-[11px] font-black uppercase tracking-[0.22em] text-emerald-200/70">Selecciones</div>
+                    <div className="mt-1 text-sm font-black text-white">Navega el álbum</div>
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsMobileSelectionMenuOpen(false)}
+                    className="rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-[11px] font-black uppercase tracking-wide text-white"
+                  >
+                    Cerrar
+                  </button>
+                </div>
 
-                  <div className="mt-4 rounded-2xl border border-white/15 bg-white/10 p-3 shadow-inner">
-                    <div className="mb-2 flex items-center justify-between text-sm font-bold text-white">
-                      <span>Progreso del álbum</span>
-                      <span>{completedSections}/{totalSections}</span>
-                    </div>
+                <div className="h-full overflow-y-auto p-3 pb-10">
+                  <div className="space-y-2">
+                    {selections.map((selection, index) => {
+                      const isActive = index === currentSelectionIndex
+                      const stats = selectionStats.find((s) => s.selectionId === selection.id)
 
-                    <div className="h-3 w-full overflow-hidden rounded-full bg-slate-900/60 ring-1 ring-white/10">
-                      <div
-                        className="h-full rounded-full bg-[linear-gradient(90deg,#fde047,#34d399,#008445)] shadow-[0_0_16px_rgba(0,132,69,0.45)] transition-all"
-                        style={{ width: `${progress}%` }}
-                      />
-                    </div>
+                      return (
+                        <button
+                          key={selection.id}
+                          onClick={() => {
+                            setCurrentSelectionIndex(index)
+                            setIsMobileSelectionMenuOpen(false)
+                          }}
+                          className={`group w-full rounded-2xl border px-3 py-3 text-left transition-all ${
+                            isActive
+                              ? 'border-[#008445]/60 bg-[linear-gradient(135deg,rgba(0,132,69,0.24),rgba(16,185,129,0.16),rgba(255,255,255,0.08))] shadow-[0_0_20px_rgba(0,132,69,0.18)]'
+                              : 'border-white/10 bg-white/[0.04]'
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className={`flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.18em] ${
+                                isActive ? 'text-emerald-200' : 'text-emerald-200/60'
+                              }`}>
+                                <ShieldIcon />
+                                Selección {selection.number ?? index + 1}
+                              </div>
+                              <div className={`mt-1 line-clamp-2 text-[13px] font-black ${isActive ? 'text-white' : 'text-emerald-50'}`}>
+                                {selection.name}
+                              </div>
+                            </div>
 
-                    <div className="mt-3 flex items-center justify-between">
-                      <span className="rounded-full border border-yellow-300/50 bg-yellow-300/10 px-2.5 py-1 text-[11px] font-black uppercase tracking-wide text-yellow-200">
-                        Colección
-                      </span>
-                      <span className="text-xs font-black uppercase tracking-[0.18em] text-emerald-100">
-                        {progress}% completo
-                      </span>
-                    </div>
+                            <div className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-black ${
+                              isActive ? 'bg-yellow-300 text-slate-950 shadow' : 'bg-slate-800 text-emerald-100'
+                            }`}>
+                              {stats?.missing ?? 0}
+                            </div>
+                          </div>
+
+                          <div className="mt-2.5 flex items-center justify-between gap-2">
+                            <span className={`rounded-full px-2.5 py-1 text-[11px] font-black ${getSelectionStatusBadge(stats?.status)}`}>
+                              {getSelectionStatusLabel(stats?.status)}
+                            </span>
+                            <span className="text-[11px] font-bold text-emerald-200/75">
+                              {stats?.obtained ?? 0}/{stats?.total ?? 0}
+                            </span>
+                          </div>
+                        </button>
+                      )
+                    })}
                   </div>
                 </div>
               </div>
+            </div>
+          ) : null}
+
+          <section className="min-w-0">
+            <div className="space-y-3">
+              {isMobile ? (
+                <div className="sticky top-3 z-30 overflow-hidden rounded-[24px] border border-white/15 bg-slate-950/85 shadow-[0_18px_40px_rgba(2,8,23,0.45)] backdrop-blur-xl lg:hidden">
+                  <div className="border-b border-white/10 bg-[linear-gradient(135deg,rgba(2,132,199,0.18),rgba(15,23,42,0.9),rgba(8,145,178,0.18))] px-4 py-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wide text-cyan-200">
+                          <DragIcon />
+                          Modo smartphone
+                        </div>
+                        <h2 className="mt-1 text-sm font-semibold text-white">Toca la lámina y luego toca su espacio</h2>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => setIsMobileSelectionMenuOpen(true)}
+                        className="rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-[11px] font-black uppercase tracking-wide text-white transition hover:bg-white/10"
+                      >
+                        Selecciones
+                      </button>
+                    </div>
+
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setIsMobileStickerTrayOpen(true)}
+                        className="rounded-full bg-cyan-300 px-3 py-1.5 text-[11px] font-black uppercase tracking-wide text-slate-950 shadow"
+                      >
+                        Ver láminas ({pendingIssuedStickers.length})
+                      </button>
+
+                      {selectedStickerId ? (
+                        <span className="rounded-full border border-yellow-300/50 bg-yellow-300/10 px-3 py-1.5 text-[11px] font-black uppercase tracking-wide text-yellow-100">
+                          Lámina seleccionada #{stickersById[selectedStickerId]?.sticker_number ?? ''}
+                        </span>
+                      ) : (
+                        <span className="rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-[11px] font-black uppercase tracking-wide text-white/80">
+                          Elige una lámina para pegar
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+
               <div className="hidden lg:block sticky top-3 z-30 overflow-hidden rounded-[24px] border border-white/15 bg-slate-950/85 shadow-[0_18px_40px_rgba(2,8,23,0.45)] backdrop-blur-xl">
                 <div className="border-b border-white/10 bg-[linear-gradient(135deg,rgba(2,132,199,0.18),rgba(15,23,42,0.9),rgba(8,145,178,0.18))] px-4 py-2.5">
                   <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
@@ -1519,6 +1484,15 @@ export default function AlbumClient() {
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2">
+                      {isMobile ? (
+                        <button
+                          type="button"
+                          onClick={() => setIsMobileSelectionMenuOpen(true)}
+                          className="rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-[11px] font-black uppercase tracking-wide text-white transition hover:bg-white/10"
+                        >
+                          Selecciones
+                        </button>
+                      ) : null}
                       <button
                         type="button"
                         onClick={() => setPanelFilter('all')}
@@ -1530,13 +1504,15 @@ export default function AlbumClient() {
                       >
                         Pendiente por pegar ({pendingIssuedStickers.length})
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => setIsPegadoPanelCollapsed((prev) => !prev)}
-                        className="rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-[11px] font-black uppercase tracking-wide text-white transition hover:bg-white/10"
-                      >
-                        {isPegadoPanelCollapsed ? 'Expandir panel' : 'Ocultar panel'}
-                      </button>
+                      {!isMobile ? (
+                        <button
+                          type="button"
+                          onClick={() => setIsPegadoPanelCollapsed((prev) => !prev)}
+                          className="rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-[11px] font-black uppercase tracking-wide text-white transition hover:bg-white/10"
+                        >
+                          {isPegadoPanelCollapsed ? 'Expandir panel' : 'Ocultar panel'}
+                        </button>
+                      ) : null}
                     </div>
                   </div>
 
@@ -1545,12 +1521,6 @@ export default function AlbumClient() {
                       <span className="rounded-full border border-yellow-400/30 bg-yellow-400/10 px-3 py-1 text-yellow-100">
                         Guardando pegado...
                       </span>
-                    </div>
-                  ) : null}
-
-                  {panelMessage ? (
-                    <div className="mt-2 rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-white">
-                      {panelMessage}
                     </div>
                   ) : null}
                 </div>
@@ -1657,7 +1627,7 @@ export default function AlbumClient() {
                 ) : null}
 
                 <div
-                  className="relative overflow-hidden border-b border-slate-200 px-4 py-4 md:px-5"
+                  className="relative overflow-hidden border-b border-slate-200 px-5 py-4"
                   style={{ background: `linear-gradient(135deg, ${currentSelectionTheme.accentSoft}, #ffffff 55%, ${currentSelectionTheme.accentSoft})` }}
                 >
                   <div
@@ -1679,7 +1649,7 @@ export default function AlbumClient() {
                         Selección {currentSelection.number ?? currentSelectionIndex + 1} de {selections.length}
                       </div>
 
-                      <h2 className="mt-2.5 text-[1.6rem] font-black tracking-tight leading-tight text-slate-900 md:text-[2.25rem]">
+                      <h2 className="mt-2.5 text-[1.7rem] sm:text-[2rem] lg:text-[2.25rem] font-black tracking-tight leading-tight text-slate-900">
                         {currentSelection.name}
                       </h2>
 
@@ -1721,7 +1691,7 @@ export default function AlbumClient() {
                       ) : null}
                     </div>
 
-                    <div className="flex flex-col items-start gap-3 lg:min-w-[220px] lg:items-end">
+                    <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between lg:min-w-[220px] lg:flex-col lg:items-end">
                       <div className="flex gap-2">
                         <button
                           onClick={() => canGoPrev && setCurrentSelectionIndex((prev) => prev - 1)}
@@ -1751,7 +1721,7 @@ export default function AlbumClient() {
 
                       {!isCurrentIntroSelection && currentSelectionShield ? (
                         <div
-                          className="relative h-[120px] w-[120px] overflow-hidden rounded-[22px] border p-0 shadow-sm md:h-[190px] md:w-[190px]"
+                          className="relative h-[120px] w-[120px] overflow-hidden rounded-[22px] border p-0 shadow-sm sm:h-[150px] sm:w-[150px] lg:h-[190px] lg:w-[190px]"
                           style={{
                             borderColor: '#d4af37',
                             background: 'linear-gradient(135deg,#fffdf7,#fff8e1,#fffdf7)',
@@ -1772,7 +1742,7 @@ export default function AlbumClient() {
                   </div>
                 </div>
 
-                <div className="p-3 md:p-4 lg:p-5">
+                <div className="p-4 lg:p-5">
                   {isCurrentIntroSelection ? (
                     <div className="space-y-6">
                       <div
@@ -1900,23 +1870,21 @@ export default function AlbumClient() {
                       </div>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                       {currentSelectionStickers.map((sticker) => {
                         const isPlaced = placedStickerIds.has(sticker.id)
                         const isHovering = hoveredStickerId === sticker.id
                         const isCorrectTarget = draggedStickerId === sticker.id
-                        const showDropHint = Boolean((isMobile ? selectedStickerId : draggedStickerId) && !isPlaced)
-                        const isSelectedMobileSticker = isMobile && selectedStickerId === sticker.id
-                        const isJustPlaced = stickerJustPlacedId === sticker.id
-                        const showFoilBurst = foilBurstStickerId === sticker.id
+                        const showDropHint = Boolean(draggedStickerId && !isPlaced)
 
                         return (
                           <div
                             key={sticker.id}
+                            id={`album-slot-${sticker.id}`}
+                            onClick={() => isMobile && !isPlaced && selectedStickerId ? handleMobileStickerPlacement(sticker) : undefined}
                             onDragOver={(event) => !isPlaced && !isMobile && handleCardDragOver(event, sticker)}
                             onDragLeave={() => !isMobile && handleCardDragLeave(sticker.id)}
                             onDrop={(event) => !isPlaced && !isMobile && handleCardDrop(event, sticker)}
-                            onClick={() => !isPlaced && isMobile && handleMobileCardTap(sticker)}
                             className={`group relative overflow-hidden rounded-[20px] border transition-all ${
                               isPlaced
                                 ? ''
@@ -1926,10 +1894,12 @@ export default function AlbumClient() {
                                 ? isCorrectTarget
                                   ? 'ring-4 ring-emerald-300'
                                   : 'ring-4 ring-amber-300'
-                                : isSelectedMobileSticker
-                                  ? 'ring-4 ring-cyan-300 panini-slot-pulse'
-                                  : isJustPlaced
-                                    ? 'ring-4 ring-yellow-300'
+                                : isMobile && selectedStickerId && !isPlaced
+                                  ? selectedStickerId === sticker.id
+                                    ? 'ring-4 ring-emerald-300 shadow-[0_0_0_4px_rgba(74,222,128,0.16)]'
+                                    : 'ring-2 ring-cyan-200/50'
+                                  : lastPlacedStickerId === sticker.id
+                                    ? 'animate-[panini-slot-pop_680ms_ease-out] ring-4 ring-yellow-300'
                                     : ''
                             }`}
                             style={
@@ -1960,40 +1930,43 @@ export default function AlbumClient() {
                             </div>
 
                             {isPlaced ? (
-                              <div
-                                className="pointer-events-none absolute inset-x-0 top-0 h-24"
-                                style={{ background: `radial-gradient(circle at top, rgba(255,255,255,0.6), ${currentSelectionTheme.accent}00 60%)` }}
-                              />
+                              <>
+                                <div
+                                  className="pointer-events-none absolute inset-x-0 top-0 h-24"
+                                  style={{ background: `radial-gradient(circle at top, rgba(255,255,255,0.6), ${currentSelectionTheme.accent}00 60%)` }}
+                                />
+                                <div className="pointer-events-none absolute inset-0 opacity-0 [background:linear-gradient(120deg,transparent_15%,rgba(255,255,255,0.7)_40%,transparent_65%)] group-hover:opacity-100 group-hover:animate-[panini-foil_900ms_linear]" />
+                              </>
                             ) : null}
 
-                            {showDropHint && !isPlaced && !isMobile ? (
+                            {(showDropHint || (isMobile && selectedStickerId)) && !isPlaced ? (
                               <div
                                 className={`pointer-events-none absolute inset-x-3 top-12 z-10 rounded-2xl border px-3 py-2 text-center text-xs font-black uppercase tracking-[0.18em] ${
-                                  isCorrectTarget
-                                    ? 'border-emerald-300 bg-emerald-50 text-emerald-700'
-                                    : isHovering
-                                      ? 'border-amber-300 bg-amber-50 text-amber-700'
-                                      : 'border-slate-300 bg-white/90 text-slate-500'
+                                  isMobile && selectedStickerId
+                                    ? selectedStickerId === sticker.id
+                                      ? 'border-emerald-300 bg-emerald-50 text-emerald-700'
+                                      : 'border-cyan-300 bg-cyan-50 text-cyan-700'
+                                    : isCorrectTarget
+                                      ? 'border-emerald-300 bg-emerald-50 text-emerald-700'
+                                      : isHovering
+                                        ? 'border-amber-300 bg-amber-50 text-amber-700'
+                                        : 'border-slate-300 bg-white/90 text-slate-500'
                                 }`}
                               >
-                                {isCorrectTarget
-                                  ? 'Suelta aquí'
-                                  : isHovering
-                                    ? 'No corresponde'
-                                    : 'Espacio disponible'}
+                                {isMobile && selectedStickerId
+                                  ? selectedStickerId === sticker.id
+                                    ? 'Toca para pegar'
+                                    : 'Espacio incorrecto'
+                                  : isCorrectTarget
+                                    ? 'Suelta aquí'
+                                    : isHovering
+                                      ? 'No corresponde'
+                                      : 'Espacio disponible'}
                               </div>
                             ) : null}
 
                             <div className="p-2.5">
-                              <div className={`relative overflow-hidden rounded-[18px] border border-slate-200 bg-white ${isJustPlaced ? 'panini-sticker-bounce panini-foil' : ''}`}>
-                                {showFoilBurst ? (
-                                  <>
-                                    <div className="panini-burst-ring pointer-events-none absolute inset-4 z-10 rounded-[20px] border-2 border-yellow-300/80" />
-                                    <div className="pointer-events-none absolute inset-x-8 top-4 z-10 rounded-full bg-white/85 px-3 py-1 text-center text-[10px] font-black uppercase tracking-[0.22em] text-amber-700 shadow">
-                                      ¡Pegada!
-                                    </div>
-                                  </>
-                                ) : null}
+                              <div className="overflow-hidden rounded-[18px] border border-slate-200 bg-white">
                                 {isPlaced ? (
                                   sticker.art_asset_url ? (
                                     <Image
@@ -2001,19 +1974,19 @@ export default function AlbumClient() {
                                       alt={sticker.name}
                                       width={300}
                                       height={400}
-                                      className="h-[240px] w-full object-cover md:h-[280px]"
+                                      className="h-[280px] w-full object-cover"
                                     />
                                   ) : (
-                                    <div className="flex h-[240px] items-center justify-center text-sm font-semibold text-slate-400 md:h-[280px]">
+                                    <div className="flex h-[280px] items-center justify-center text-sm font-semibold text-slate-400">
                                       Sin imagen
                                     </div>
                                   )
                                 ) : (
-                                  <div className="relative flex h-[240px] items-center justify-center bg-[linear-gradient(135deg,#ffffff,#e2e8f0)] text-center text-sm font-black text-slate-400 md:h-[280px]">
+                                  <div className="relative flex h-[280px] items-center justify-center bg-[linear-gradient(135deg,#ffffff,#e2e8f0)] text-center text-sm font-black text-slate-400">
                                     <div className="absolute inset-0 opacity-40 [background-image:linear-gradient(45deg,transparent_25%,rgba(148,163,184,0.25)_25%,rgba(148,163,184,0.25)_50%,transparent_50%,transparent_75%,rgba(148,163,184,0.25)_75%)] [background-size:24px_24px]" />
                                     <div className="relative flex flex-col items-center gap-2">
                                       <BallIcon />
-                                      {isMobile && selectedStickerId ? 'Toca para pegar aquí' : 'Arrastra la lámina aquí'}
+                                      Arrastra la lámina aquí
                                     </div>
                                   </div>
                                 )}
@@ -2047,7 +2020,7 @@ export default function AlbumClient() {
                                   </>
                                 ) : (
                                   <div className="inline-flex rounded-full border border-slate-300 bg-slate-200 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-slate-600">
-                                    {isMobile && selectedStickerId ? 'Toca el espacio' : 'Pendiente'}
+                                    Pendiente
                                   </div>
                                 )}
                               </div>
@@ -2064,14 +2037,132 @@ export default function AlbumClient() {
         </div>
       </div>
       {isMobile && pendingIssuedStickers.length > 0 ? (
-        <button
-          type="button"
-          onClick={() => setIsMobilePendingPanelOpen(true)}
-          className="fixed bottom-4 right-4 z-50 rounded-full bg-[linear-gradient(135deg,#22d3ee,#06b6d4)] px-4 py-3 text-[11px] font-black uppercase tracking-wide text-slate-950 shadow-[0_16px_30px_rgba(34,211,238,0.35)] lg:hidden"
-        >
-          Ver láminas ({pendingIssuedStickers.length})
-        </button>
+        <>
+          {!isMobileStickerTrayOpen ? (
+            <button
+              type="button"
+              onClick={() => setIsMobileStickerTrayOpen(true)}
+              className="fixed bottom-5 right-4 z-[75] rounded-full bg-[linear-gradient(135deg,#fde047,#facc15,#eab308)] px-4 py-3 text-[11px] font-black uppercase tracking-[0.16em] text-slate-950 shadow-[0_18px_38px_rgba(15,23,42,0.35)] lg:hidden"
+            >
+              Ver láminas ({pendingIssuedStickers.length})
+            </button>
+          ) : null}
+
+          <div
+            className={`fixed inset-x-0 bottom-0 z-[74] rounded-t-[28px] border border-white/10 bg-slate-950/96 shadow-[0_-18px_40px_rgba(2,8,23,0.48)] backdrop-blur-xl transition-transform duration-300 lg:hidden ${
+              isMobileStickerTrayOpen ? 'translate-y-0' : 'translate-y-[calc(100%-68px)]'
+            }`}
+          >
+            <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
+              <div>
+                <div className="text-[10px] font-black uppercase tracking-[0.22em] text-cyan-200">Panel táctil</div>
+                <div className="mt-1 text-sm font-black text-white">Láminas por pegar</div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsMobileStickerTrayOpen((prev) => !prev)}
+                  className="rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-[11px] font-black uppercase tracking-wide text-white"
+                >
+                  {isMobileStickerTrayOpen ? 'Ocultar' : 'Abrir'}
+                </button>
+              </div>
+            </div>
+
+            <div className="px-4 pb-4 pt-3">
+              <div className="mb-3 flex flex-wrap items-center gap-2">
+                {selectedStickerId ? (
+                  <span className="rounded-full border border-yellow-300/50 bg-yellow-300/10 px-3 py-1.5 text-[11px] font-black uppercase tracking-wide text-yellow-100">
+                    Seleccionada #{stickersById[selectedStickerId]?.sticker_number ?? ''}
+                  </span>
+                ) : (
+                  <span className="rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-[11px] font-black uppercase tracking-wide text-white/80">
+                    Toca una lámina y luego su espacio
+                  </span>
+                )}
+              </div>
+
+              <div className="flex gap-3 overflow-x-auto pb-1">
+                {visiblePendingStickers.map((sticker) => {
+                  const isSelected = selectedStickerId === sticker.id
+
+                  return (
+                    <button
+                      key={sticker.id}
+                      id={`mobile-sticker-${sticker.id}`}
+                      type="button"
+                      onClick={() => handleSelectMobileSticker(sticker.id)}
+                      className={`group relative w-[94px] shrink-0 overflow-hidden rounded-[20px] border transition-all ${
+                        isSelected
+                          ? 'scale-[1.06] border-yellow-300 bg-[linear-gradient(180deg,#fffef2,#fef3c7)] shadow-[0_18px_32px_rgba(250,204,21,0.26)]'
+                          : 'border-white/10 bg-[linear-gradient(180deg,#ffffff,#ecfeff)] shadow-[0_8px_18px_rgba(15,23,42,0.18)]'
+                      }`}
+                    >
+                      <div className="absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100 [background:linear-gradient(120deg,transparent_15%,rgba(255,255,255,0.82)_40%,transparent_65%)] group-hover:animate-[panini-foil_900ms_linear]" />
+                      <div className="absolute right-1.5 top-1.5 z-10 rounded-full bg-slate-950/80 px-1.5 py-0.5 text-[9px] font-bold text-white shadow">
+                        #{sticker.sticker_number}
+                      </div>
+
+                      <div className="relative h-[118px] overflow-hidden bg-white">
+                        {sticker.art_asset_url ? (
+                          <Image
+                            src={sticker.art_asset_url}
+                            alt={sticker.name}
+                            fill
+                            className="object-cover"
+                          />
+                        ) : (
+                          <div className="flex h-full items-center justify-center text-center text-[10px] font-semibold text-slate-400">
+                            Sin imagen
+                          </div>
+                        )}
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          </div>
+        </>
       ) : null}
+
+      <style jsx global>{`
+        @keyframes panini-foil {
+          0% { transform: translateX(-140%); opacity: 0; }
+          20% { opacity: .9; }
+          100% { transform: translateX(160%); opacity: 0; }
+        }
+
+        @keyframes panini-slot-pop {
+          0% { transform: scale(1); }
+          35% { transform: scale(1.05); }
+          60% { transform: scale(.99); }
+          100% { transform: scale(1); }
+        }
+
+        @keyframes panini-shimmer {
+          0% { transform: translateX(-140%) rotate(8deg); opacity: 0; }
+          18% { opacity: 1; }
+          100% { transform: translateX(160%) rotate(8deg); opacity: 0; }
+        }
+
+        @keyframes panini-fly {
+          0% {
+            transform: translate3d(0, 0, 0) scale(1) rotate(0deg);
+            opacity: 1;
+          }
+          55% {
+            transform: translate3d(calc(var(--panini-end-x) * 0.65), calc(var(--panini-end-y) * 0.65), 0) scale(1.08) rotate(6deg);
+            opacity: 1;
+          }
+          100% {
+            transform: translate3d(var(--panini-end-x), var(--panini-end-y), 0) scale(.78) rotate(0deg);
+            opacity: 0;
+          }
+        }
+      `}</style>
+
     </main>
   )
 }
