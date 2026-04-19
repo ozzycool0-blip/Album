@@ -85,6 +85,7 @@ const ROLE_ADMIN_LOCAL = 2
 const INTRO_SELECTION_ORDER = 0
 const INTRO_SELECTION_NAME = 'Indicaciones de llenado'
 const USER_PHOTOS_TABLE = 'user_selection_photos'
+const USERS_PER_PAGE = 50
 
 function isAdminGeneral(roleId: string | number | null | undefined) {
   return roleId === ROLE_ADMIN_GENERAL || roleId === String(ROLE_ADMIN_GENERAL)
@@ -140,6 +141,7 @@ export default function AdminPagePaniniV3() {
   const [createUserMessage, setCreateUserMessage] = useState('')
 
   const [packSize, setPackSize] = useState('3')
+  const [dashboardPage, setDashboardPage] = useState(1)
 
   async function checkAdminAccess() {
     const {
@@ -376,6 +378,57 @@ export default function AdminPagePaniniV3() {
     })
   }, [users, issuedStickers, placements, totalStickers, totalSelections, selections, stickersBySelection, userSelectionPhotos])
 
+  const totalDashboardPages = useMemo(() => {
+    return Math.max(1, Math.ceil(userProgressRows.length / USERS_PER_PAGE))
+  }, [userProgressRows])
+
+  const paginatedUserProgressRows = useMemo(() => {
+    const start = (dashboardPage - 1) * USERS_PER_PAGE
+    return userProgressRows.slice(start, start + USERS_PER_PAGE)
+  }, [userProgressRows, dashboardPage])
+
+  const packsLastFiveDays = useMemo(() => {
+    const now = Date.now()
+    const fiveDaysAgo = now - 5 * 24 * 60 * 60 * 1000
+
+    return packs
+      .filter((pack) => {
+        if (!pack.created_at) return false
+        const packTime = new Date(pack.created_at).getTime()
+        return !Number.isNaN(packTime) && packTime >= fiveDaysAgo && packTime <= now
+      })
+      .map((pack) => {
+        const packUser = users.find((user) => user.id === pack.user_id)
+        const packItems = issuedStickers.filter((item) => item.pack_id === pack.id)
+        const labels = Array.from(
+          new Set(
+            packItems
+              .map((item) => stickerById[item.sticker_id]?.sticker_number)
+              .filter((num): num is number => typeof num === 'number')
+          )
+        )
+          .map((num) => `#${num}`)
+          .join(', ')
+
+        return {
+          ...pack,
+          userName: packUser?.full_name || 'Usuario',
+          userEmail: packUser?.email || 'Usuario',
+          itemCount: new Set(packItems.map((item) => item.sticker_id)).size,
+          labels: labels || 'Sin detalle',
+        }
+      })
+      .sort((a, b) => {
+        const timeA = a.created_at ? new Date(a.created_at).getTime() : 0
+        const timeB = b.created_at ? new Date(b.created_at).getTime() : 0
+        return timeB - timeA
+      })
+  }, [packs, users, issuedStickers, stickerById])
+
+  useEffect(() => {
+    setDashboardPage((prev) => Math.min(prev, totalDashboardPages))
+  }, [totalDashboardPages])
+
   const selectedUserIssuedIds = useMemo(() => {
     return new Set(
       issuedStickers.filter((item) => item.user_id === selectedUserId).map((item) => item.sticker_id)
@@ -427,28 +480,49 @@ export default function AdminPagePaniniV3() {
     return stickers.filter((sticker) => !selectedUserPlacedIds.has(sticker.id))
   }, [stickers, selectedUserPlacedIds])
 
-  const recentPackHistory = useMemo(() => {
-    return packs.slice(0, 12).map((pack) => {
-      const packUser = users.find((user) => user.id === pack.user_id)
-      const packItems = issuedStickers.filter((item) => item.pack_id === pack.id)
-      const labels = Array.from(
-        new Set(
-          packItems
-            .map((item) => stickerById[item.sticker_id]?.sticker_number)
-            .filter((num): num is number => typeof num === 'number')
-        )
-      )
-        .map((num) => `#${num}`)
-        .join(', ')
 
-      return {
-        ...pack,
-        userEmail: packUser?.email || 'Usuario',
-        itemCount: new Set(packItems.map((item) => item.sticker_id)).size,
-        labels: labels || 'Sin detalle',
-      }
-    })
-  }, [packs, users, issuedStickers, stickerById])
+  function handleDownloadDashboardCsv() {
+    const headers = [
+      'Usuario',
+      'Correo',
+      'Emitidas',
+      'Pegadas',
+      'Faltantes',
+      'Selecciones completas',
+      'Progreso (%)',
+    ]
+
+    const escapeCsvValue = (value: string | number) => {
+      const safeValue = String(value ?? '')
+      return `"${safeValue.replace(/"/g, '""')}"`
+    }
+
+    const rows = userProgressRows.map((row) => [
+      row.full_name || 'Usuario',
+      row.email,
+      row.issuedCount,
+      row.placedCount,
+      row.missingCount,
+      row.completedSelections,
+      row.progressPercent,
+    ])
+
+    const csvContent = [headers, ...rows]
+      .map((line) => line.map(escapeCsvValue).join(','))
+      .join('\n')
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    const date = new Date().toISOString().slice(0, 10)
+
+    link.href = url
+    link.setAttribute('download', `reporte_dashboard_${tenantName || 'tenant'}_${date}.csv`)
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(url)
+  }
 
   async function refreshAfterAction(message?: string) {
     await loadAdminData(tenantId)
@@ -911,10 +985,23 @@ export default function AdminPagePaniniV3() {
                 </div>
 
                 <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
-                  <div className="flex items-center justify-between gap-3">
+                  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                     <div>
                       <div className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">Progreso global</div>
                       <h2 className="mt-2 text-xl font-black text-slate-900">Avance por usuario</h2>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold text-slate-600">
+                        Página {dashboardPage} de {totalDashboardPages} · {USERS_PER_PAGE} usuarios por página
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleDownloadDashboardCsv}
+                        className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-xs font-black text-slate-800 transition hover:bg-slate-50"
+                      >
+                        Descargar reporte CSV
+                      </button>
                     </div>
                   </div>
 
@@ -931,7 +1018,7 @@ export default function AdminPagePaniniV3() {
                         </tr>
                       </thead>
                       <tbody>
-                        {userProgressRows.map((row) => (
+                        {paginatedUserProgressRows.map((row) => (
                           <tr key={row.id} className="border-b border-slate-100 align-top">
                             <td className="py-3 pr-4">
                               <div className="font-bold text-slate-900">{row.full_name || 'Usuario'}</div>
@@ -955,31 +1042,83 @@ export default function AdminPagePaniniV3() {
                       </tbody>
                     </table>
                   </div>
+
+                  <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 pt-4">
+                    <div className="text-sm font-semibold text-slate-600">
+                      Mostrando {paginatedUserProgressRows.length} de {userProgressRows.length} usuarios.
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setDashboardPage((prev) => Math.max(prev - 1, 1))}
+                        disabled={dashboardPage === 1}
+                        className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-xs font-black text-slate-800 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        Anterior
+                      </button>
+
+                      {Array.from({ length: totalDashboardPages }, (_, index) => index + 1).map((page) => (
+                        <button
+                          key={page}
+                          type="button"
+                          onClick={() => setDashboardPage(page)}
+                          className={`rounded-xl px-4 py-2 text-xs font-black transition ${
+                            dashboardPage === page
+                              ? 'bg-slate-900 text-white'
+                              : 'border border-slate-300 bg-white text-slate-800 hover:bg-slate-50'
+                          }`}
+                        >
+                          {page}
+                        </button>
+                      ))}
+
+                      <button
+                        type="button"
+                        onClick={() => setDashboardPage((prev) => Math.min(prev + 1, totalDashboardPages))}
+                        disabled={dashboardPage === totalDashboardPages}
+                        className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-xs font-black text-slate-800 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        Siguiente
+                      </button>
+                    </div>
+                  </div>
                 </div>
 
                 <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
                   <div className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">Historial</div>
-                  <h2 className="mt-2 text-xl font-black text-slate-900">Últimos sobres enviados</h2>
+                  <h2 className="mt-2 text-xl font-black text-slate-900">Sobres enviados en los últimos 5 días</h2>
 
-                  <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                    {recentPackHistory.length > 0 ? (
-                      recentPackHistory.map((pack) => (
-                        <div key={pack.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                          <div className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500">
-                            Sobre
-                          </div>
-                          <div className="mt-1 text-sm font-black text-slate-900">{pack.userEmail}</div>
-                          <div className="mt-2 text-sm text-slate-600">Láminas: {pack.itemCount}</div>
-                          <div className="mt-1 text-sm text-slate-600">{pack.labels}</div>
-                          <div className="mt-3 text-xs font-semibold text-slate-500">{formatDate(pack.created_at)}</div>
-                        </div>
-                      ))
-                    ) : (
-                      <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-500">
-                        Aún no hay sobres registrados.
-                      </div>
-                    )}
-                  </div>
+                  {packsLastFiveDays.length > 0 ? (
+                    <div className="mt-5 overflow-x-auto">
+                      <table className="min-w-full text-sm">
+                        <thead>
+                          <tr className="border-b border-slate-200 text-left">
+                            <th className="pb-3 pr-4 font-black text-slate-700">Fecha envío</th>
+                            <th className="pb-3 pr-4 font-black text-slate-700">Usuario</th>
+                            <th className="pb-3 pr-4 font-black text-slate-700">Correo</th>
+                            <th className="pb-3 pr-4 font-black text-slate-700">Cantidad láminas</th>
+                            <th className="pb-3 pr-4 font-black text-slate-700">Detalle</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {packsLastFiveDays.map((pack) => (
+                            <tr key={pack.id} className="border-b border-slate-100">
+                              <td className="py-3 pr-4 font-semibold text-slate-800">{formatDate(pack.created_at)}</td>
+                              <td className="py-3 pr-4 font-semibold text-slate-900">{pack.userName}</td>
+                              <td className="py-3 pr-4 text-slate-600">{pack.userEmail}</td>
+                              <td className="py-3 pr-4 font-semibold text-slate-800">{pack.itemCount}</td>
+                              <td className="py-3 pr-4 text-slate-600">{pack.labels}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <div className="mt-5 rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-500">
+                      Hace 5 días no se envían sobres a los usuarios.
+                    </div>
+                  )}
                 </div>
               </>
             ) : null}

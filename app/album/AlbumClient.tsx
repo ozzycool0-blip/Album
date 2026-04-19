@@ -1147,11 +1147,6 @@ export default function AlbumClient() {
   function handleSelectMobileSticker(stickerId: string) {
     setSelectedStickerId(stickerId)
     setIsMobileStickerTrayOpen(true)
-    const sticker = stickersById[stickerId]
-
-    if (sticker) {
-      showPanelMessage(`Lámina #${sticker.sticker_number} lista. Ahora toca su espacio en el álbum.`)
-    }
   }
 
   async function handleMobileStickerPlacement(targetSticker: Sticker) {
@@ -1894,13 +1889,9 @@ export default function AlbumClient() {
                                 ? isCorrectTarget
                                   ? 'ring-4 ring-emerald-300'
                                   : 'ring-4 ring-amber-300'
-                                : isMobile && selectedStickerId && !isPlaced
-                                  ? selectedStickerId === sticker.id
-                                    ? 'ring-4 ring-emerald-300 shadow-[0_0_0_4px_rgba(74,222,128,0.16)]'
-                                    : 'ring-2 ring-cyan-200/50'
-                                  : lastPlacedStickerId === sticker.id
-                                    ? 'animate-[panini-slot-pop_680ms_ease-out] ring-4 ring-yellow-300'
-                                    : ''
+                                : lastPlacedStickerId === sticker.id
+                                  ? 'animate-[panini-slot-pop_680ms_ease-out] ring-4 ring-yellow-300'
+                                  : ''
                             }`}
                             style={
                               isPlaced
@@ -1939,29 +1930,21 @@ export default function AlbumClient() {
                               </>
                             ) : null}
 
-                            {(showDropHint || (isMobile && selectedStickerId)) && !isPlaced ? (
+                            {showDropHint && !isPlaced ? (
                               <div
                                 className={`pointer-events-none absolute inset-x-3 top-12 z-10 rounded-2xl border px-3 py-2 text-center text-xs font-black uppercase tracking-[0.18em] ${
-                                  isMobile && selectedStickerId
-                                    ? selectedStickerId === sticker.id
-                                      ? 'border-emerald-300 bg-emerald-50 text-emerald-700'
-                                      : 'border-cyan-300 bg-cyan-50 text-cyan-700'
-                                    : isCorrectTarget
-                                      ? 'border-emerald-300 bg-emerald-50 text-emerald-700'
-                                      : isHovering
-                                        ? 'border-amber-300 bg-amber-50 text-amber-700'
-                                        : 'border-slate-300 bg-white/90 text-slate-500'
+                                  isCorrectTarget
+                                    ? 'border-emerald-300 bg-emerald-50 text-emerald-700'
+                                    : isHovering
+                                      ? 'border-amber-300 bg-amber-50 text-amber-700'
+                                      : 'border-slate-300 bg-white/90 text-slate-500'
                                 }`}
                               >
-                                {isMobile && selectedStickerId
-                                  ? selectedStickerId === sticker.id
-                                    ? 'Toca para pegar'
-                                    : 'Espacio incorrecto'
-                                  : isCorrectTarget
-                                    ? 'Suelta aquí'
-                                    : isHovering
-                                      ? 'No corresponde'
-                                      : 'Espacio disponible'}
+                                {isCorrectTarget
+                                  ? 'Suelta aquí'
+                                  : isHovering
+                                    ? 'No corresponde'
+                                    : 'Espacio disponible'}
                               </div>
                             ) : null}
 
