@@ -1453,7 +1453,7 @@ export default function AlbumClient() {
 
                       {selectedStickerId ? (
                         <span className="rounded-full border border-yellow-300/50 bg-yellow-300/10 px-3 py-1.5 text-[11px] font-black uppercase tracking-wide text-yellow-100">
-                          Lámina seleccionada #{stickersById[selectedStickerId]?.sticker_number ?? ''}
+                          Lámina seleccionada
                         </span>
                       ) : (
                         <span className="rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-[11px] font-black uppercase tracking-wide text-white/80">
@@ -1561,9 +1561,6 @@ export default function AlbumClient() {
                                     : 'border-white/10 bg-[linear-gradient(180deg,#ffffff,#ecfeff)] shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-0.5 hover:shadow-[0_12px_24px_rgba(15,23,42,0.22)]'
                                 }`}
                               >
-                                <div className="absolute right-1.5 top-1.5 z-10 rounded-full bg-slate-950/80 px-1.5 py-0.5 text-[9px] font-bold text-white shadow">
-                                  #{sticker.sticker_number}
-                                </div>
 
                                 <div className="relative h-[110px] overflow-hidden bg-white">
                                   {sticker.art_asset_url ? (
@@ -2057,7 +2054,7 @@ export default function AlbumClient() {
               <div className="mb-3 flex flex-wrap items-center gap-2">
                 {selectedStickerId ? (
                   <span className="rounded-full border border-yellow-300/50 bg-yellow-300/10 px-3 py-1.5 text-[11px] font-black uppercase tracking-wide text-yellow-100">
-                    Seleccionada #{stickersById[selectedStickerId]?.sticker_number ?? ''}
+                    Lámina seleccionada
                   </span>
                 ) : (
                   <span className="rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-[11px] font-black uppercase tracking-wide text-white/80">
@@ -2083,10 +2080,6 @@ export default function AlbumClient() {
                       }`}
                     >
                       <div className="absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100 [background:linear-gradient(120deg,transparent_15%,rgba(255,255,255,0.82)_40%,transparent_65%)] group-hover:animate-[panini-foil_900ms_linear]" />
-                      <div className="absolute right-1.5 top-1.5 z-10 rounded-full bg-slate-950/80 px-1.5 py-0.5 text-[9px] font-bold text-white shadow">
-                        #{sticker.sticker_number}
-                      </div>
-
                       <div className="relative h-[118px] overflow-hidden bg-white">
                         {sticker.art_asset_url ? (
                           <Image
