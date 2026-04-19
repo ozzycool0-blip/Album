@@ -458,6 +458,8 @@ export default function AlbumClient() {
   const [selectedStickerId, setSelectedStickerId] = useState<string | null>(null)
   const [isMobilePendingPanelOpen, setIsMobilePendingPanelOpen] = useState(false)
   const [isMobileSelectionsOpen, setIsMobileSelectionsOpen] = useState(false)
+  const [stickerJustPlacedId, setStickerJustPlacedId] = useState<string | null>(null)
+  const [foilBurstStickerId, setFoilBurstStickerId] = useState<string | null>(null)
 
   const [userSelectionPhotos, setUserSelectionPhotos] = useState<Record<string, UserSelectionPhoto>>({})
   const [uploadingSelectionId, setUploadingSelectionId] = useState<string | null>(null)
@@ -575,6 +577,26 @@ export default function AlbumClient() {
       setSelectedStickerId(null)
     }
   }, [isMobile])
+
+  useEffect(() => {
+    if (!stickerJustPlacedId) return
+
+    const timer = window.setTimeout(() => {
+      setStickerJustPlacedId((current) => (current === stickerJustPlacedId ? null : current))
+    }, 900)
+
+    return () => window.clearTimeout(timer)
+  }, [stickerJustPlacedId])
+
+  useEffect(() => {
+    if (!foilBurstStickerId) return
+
+    const timer = window.setTimeout(() => {
+      setFoilBurstStickerId((current) => (current === foilBurstStickerId ? null : current))
+    }, 1150)
+
+    return () => window.clearTimeout(timer)
+  }, [foilBurstStickerId])
 
   async function compressImageIfNeeded(file: File): Promise<File> {
     if (file.size <= MAX_UPLOAD_SIZE_BYTES) return file
@@ -1005,6 +1027,11 @@ export default function AlbumClient() {
       if (error) throw error
 
       setPlacements((prev) => [...prev, data])
+      setStickerJustPlacedId(dragged.id)
+      setFoilBurstStickerId(dragged.id)
+      if (typeof window !== 'undefined' && 'vibrate' in navigator) {
+        navigator.vibrate?.([35, 25, 55])
+      }
       setPanelMessage(`¡Perfecto! La lámina #${dragged.sticker_number} quedó pegada.`)
     } catch (error) {
       console.error('Error pegando lámina:', error)
@@ -1116,6 +1143,52 @@ export default function AlbumClient() {
 
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top,#008445,#0f172a_42%,#020617)]">
+      <style jsx global>{`
+        @keyframes panini-bounce {
+          0% { transform: scale(0.9) rotate(-2deg); }
+          55% { transform: scale(1.045) rotate(0deg); }
+          100% { transform: scale(1) rotate(0deg); }
+        }
+
+        @keyframes panini-foil-sheen {
+          0% { transform: translateX(-140%) skewX(-22deg); opacity: 0; }
+          25% { opacity: 0.35; }
+          60% { opacity: 0.95; }
+          100% { transform: translateX(160%) skewX(-22deg); opacity: 0; }
+        }
+
+        @keyframes panini-burst-ring {
+          0% { transform: scale(0.55); opacity: 0.65; }
+          100% { transform: scale(1.55); opacity: 0; }
+        }
+
+        @keyframes panini-slot-pulse {
+          0%, 100% { box-shadow: 0 0 0 0 rgba(34,211,238,0.18); }
+          50% { box-shadow: 0 0 0 8px rgba(34,211,238,0.08); }
+        }
+
+        .panini-sticker-bounce {
+          animation: panini-bounce 480ms cubic-bezier(0.22, 1, 0.36, 1);
+        }
+
+        .panini-foil::after {
+          content: '';
+          position: absolute;
+          inset: -20%;
+          background: linear-gradient(115deg, rgba(255,255,255,0) 20%, rgba(255,255,255,0.2) 34%, rgba(255,255,255,0.9) 48%, rgba(255,255,255,0.18) 58%, rgba(255,255,255,0) 72%);
+          animation: panini-foil-sheen 900ms ease-out forwards;
+          pointer-events: none;
+          mix-blend-mode: screen;
+        }
+
+        .panini-burst-ring {
+          animation: panini-burst-ring 720ms ease-out forwards;
+        }
+
+        .panini-slot-pulse {
+          animation: panini-slot-pulse 1.1s ease-in-out infinite;
+        }
+      `}</style>
       {isMobile && isMobileSelectionsOpen ? (
         <div className="fixed inset-0 z-[60] bg-slate-950/70 backdrop-blur-sm" onClick={() => setIsMobileSelectionsOpen(false)}>
           <div
@@ -1231,7 +1304,7 @@ export default function AlbumClient() {
                         onClick={() => handleMobileStickerSelect(sticker.id)}
                         className={`relative w-[96px] shrink-0 overflow-hidden rounded-[18px] border transition-all ${
                           isSelected
-                            ? 'scale-[1.03] border-cyan-300 bg-cyan-50 shadow-[0_14px_28px_rgba(34,211,238,0.24)]'
+                            ? 'scale-[1.06] border-yellow-300 bg-[linear-gradient(180deg,#fffdf5,#fef3c7)] shadow-[0_18px_30px_rgba(250,204,21,0.28)]'
                             : 'border-white/10 bg-[linear-gradient(180deg,#ffffff,#ecfeff)] shadow-[0_8px_18px_rgba(15,23,42,0.18)]'
                         }`}
                       >
@@ -1250,7 +1323,7 @@ export default function AlbumClient() {
                         </div>
 
                         <div className="border-t border-slate-200 px-2 py-1.5 text-center text-[10px] font-black text-slate-700">
-                          {isSelected ? 'Seleccionada' : 'Tocar'}
+                          {isSelected ? 'Lista para pegar' : 'Tocar'}
                         </div>
                       </button>
                     )
@@ -1834,6 +1907,8 @@ export default function AlbumClient() {
                         const isCorrectTarget = draggedStickerId === sticker.id
                         const showDropHint = Boolean((isMobile ? selectedStickerId : draggedStickerId) && !isPlaced)
                         const isSelectedMobileSticker = isMobile && selectedStickerId === sticker.id
+                        const isJustPlaced = stickerJustPlacedId === sticker.id
+                        const showFoilBurst = foilBurstStickerId === sticker.id
 
                         return (
                           <div
@@ -1852,8 +1927,10 @@ export default function AlbumClient() {
                                   ? 'ring-4 ring-emerald-300'
                                   : 'ring-4 ring-amber-300'
                                 : isSelectedMobileSticker
-                                  ? 'ring-4 ring-cyan-300'
-                                  : ''
+                                  ? 'ring-4 ring-cyan-300 panini-slot-pulse'
+                                  : isJustPlaced
+                                    ? 'ring-4 ring-yellow-300'
+                                    : ''
                             }`}
                             style={
                               isPlaced
@@ -1908,7 +1985,15 @@ export default function AlbumClient() {
                             ) : null}
 
                             <div className="p-2.5">
-                              <div className="overflow-hidden rounded-[18px] border border-slate-200 bg-white">
+                              <div className={`relative overflow-hidden rounded-[18px] border border-slate-200 bg-white ${isJustPlaced ? 'panini-sticker-bounce panini-foil' : ''}`}>
+                                {showFoilBurst ? (
+                                  <>
+                                    <div className="panini-burst-ring pointer-events-none absolute inset-4 z-10 rounded-[20px] border-2 border-yellow-300/80" />
+                                    <div className="pointer-events-none absolute inset-x-8 top-4 z-10 rounded-full bg-white/85 px-3 py-1 text-center text-[10px] font-black uppercase tracking-[0.22em] text-amber-700 shadow">
+                                      ¡Pegada!
+                                    </div>
+                                  </>
+                                ) : null}
                                 {isPlaced ? (
                                   sticker.art_asset_url ? (
                                     <Image
