@@ -1421,18 +1421,15 @@ export default function AlbumClient() {
 
           <section className="min-w-0">
             <div className="space-y-3">
-              {isMobile ? (
-                <div className="sticky top-3 z-30 overflow-hidden rounded-[24px] border border-white/15 bg-slate-950/85 shadow-[0_18px_40px_rgba(2,8,23,0.45)] backdrop-blur-xl lg:hidden">
-                  <div className="border-b border-white/10 bg-[linear-gradient(135deg,rgba(2,132,199,0.18),rgba(15,23,42,0.9),rgba(8,145,178,0.18))] px-4 py-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wide text-cyan-200">
-                          <DragIcon />
-                          Modo smartphone
-                        </div>
-                        <h2 className="mt-1 text-sm font-semibold text-white">Toca la lámina y luego toca su espacio</h2>
-                      </div>
+              {isMobile && pendingIssuedStickers.length > 0 ? (
+                <div className="overflow-hidden rounded-[24px] border border-white/15 bg-slate-950/85 shadow-[0_18px_40px_rgba(2,8,23,0.45)] backdrop-blur-xl lg:hidden">
+                  <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
+                    <div>
+                      <div className="text-[10px] font-black uppercase tracking-[0.22em] text-cyan-200">Panel táctil</div>
+                      <div className="mt-1 text-sm font-black text-white">Láminas por pegar</div>
+                    </div>
 
+                    <div className="flex items-center gap-2">
                       <button
                         type="button"
                         onClick={() => setIsMobileSelectionMenuOpen(true)}
@@ -1440,28 +1437,67 @@ export default function AlbumClient() {
                       >
                         Selecciones
                       </button>
-                    </div>
-
-                    <div className="mt-3 flex flex-wrap items-center gap-2">
                       <button
                         type="button"
-                        onClick={() => setIsMobileStickerTrayOpen(true)}
-                        className="rounded-full bg-cyan-300 px-3 py-1.5 text-[11px] font-black uppercase tracking-wide text-slate-950 shadow"
+                        onClick={() => setIsMobileStickerTrayOpen((prev) => !prev)}
+                        className="rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-[11px] font-black uppercase tracking-wide text-white"
                       >
-                        Ver láminas ({pendingIssuedStickers.length})
+                        {isMobileStickerTrayOpen ? 'Ocultar' : 'Abrir'}
                       </button>
-
-                      {selectedStickerId ? (
-                        <span className="rounded-full border border-yellow-300/50 bg-yellow-300/10 px-3 py-1.5 text-[11px] font-black uppercase tracking-wide text-yellow-100">
-                          Lámina seleccionada
-                        </span>
-                      ) : (
-                        <span className="rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-[11px] font-black uppercase tracking-wide text-white/80">
-                          Elige una lámina para pegar
-                        </span>
-                      )}
                     </div>
                   </div>
+
+                  {isMobileStickerTrayOpen ? (
+                    <div className="px-4 pb-4 pt-3">
+                      <div className="mb-3 flex flex-wrap items-center gap-2">
+                        {selectedStickerId ? (
+                          <span className="rounded-full border border-yellow-300/50 bg-yellow-300/10 px-3 py-1.5 text-[11px] font-black uppercase tracking-wide text-yellow-100">
+                            Lámina seleccionada
+                          </span>
+                        ) : (
+                          <span className="rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-[11px] font-black uppercase tracking-wide text-white/80">
+                            Toca una lámina y luego su espacio
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex gap-3 overflow-x-auto pb-1">
+                        {visiblePendingStickers.map((sticker) => {
+                          const isSelected = selectedStickerId === sticker.id
+
+                          return (
+                            <button
+                              key={sticker.id}
+                              id={`mobile-sticker-${sticker.id}`}
+                              type="button"
+                              onClick={() => handleSelectMobileSticker(sticker.id)}
+                              className={`group relative w-[94px] shrink-0 overflow-hidden rounded-[20px] border transition-all ${
+                                isSelected
+                                  ? 'scale-[1.06] border-yellow-300 bg-[linear-gradient(180deg,#fffef2,#fef3c7)] shadow-[0_18px_32px_rgba(250,204,21,0.26)]'
+                                  : 'border-white/10 bg-[linear-gradient(180deg,#ffffff,#ecfeff)] shadow-[0_8px_18px_rgba(15,23,42,0.18)]'
+                              }`}
+                            >
+                              <div className="absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100 [background:linear-gradient(120deg,transparent_15%,rgba(255,255,255,0.82)_40%,transparent_65%)] group-hover:animate-[panini-foil_900ms_linear]" />
+                              <div className="relative h-[118px] overflow-hidden bg-white">
+                                {sticker.art_asset_url ? (
+                                  <Image
+                                    src={sticker.art_asset_url}
+                                    alt={sticker.name}
+                                    fill
+                                    className="object-cover"
+                                  />
+                                ) : (
+                                  <div className="flex h-full items-center justify-center text-center text-[10px] font-semibold text-slate-400">
+                                    Sin imagen
+                                  </div>
+                                )}
+                              </div>
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
               ) : null}
 
@@ -2016,93 +2052,6 @@ export default function AlbumClient() {
           </section>
         </div>
       </div>
-      {isMobile && pendingIssuedStickers.length > 0 ? (
-        <>
-          {!isMobileStickerTrayOpen ? (
-            <button
-              type="button"
-              onClick={() => setIsMobileStickerTrayOpen(true)}
-              className="fixed bottom-5 right-4 z-[75] rounded-full bg-[linear-gradient(135deg,#fde047,#facc15,#eab308)] px-4 py-3 text-[11px] font-black uppercase tracking-[0.16em] text-slate-950 shadow-[0_18px_38px_rgba(15,23,42,0.35)] lg:hidden"
-            >
-              Ver láminas ({pendingIssuedStickers.length})
-            </button>
-          ) : null}
-
-          <div
-            className={`fixed inset-x-0 bottom-0 z-[74] rounded-t-[28px] border border-white/10 bg-slate-950/96 shadow-[0_-18px_40px_rgba(2,8,23,0.48)] backdrop-blur-xl transition-transform duration-300 lg:hidden ${
-              isMobileStickerTrayOpen ? 'translate-y-0' : 'translate-y-[calc(100%-68px)]'
-            }`}
-          >
-            <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
-              <div>
-                <div className="text-[10px] font-black uppercase tracking-[0.22em] text-cyan-200">Panel táctil</div>
-                <div className="mt-1 text-sm font-black text-white">Láminas por pegar</div>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setIsMobileStickerTrayOpen((prev) => !prev)}
-                  className="rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-[11px] font-black uppercase tracking-wide text-white"
-                >
-                  {isMobileStickerTrayOpen ? 'Ocultar' : 'Abrir'}
-                </button>
-              </div>
-            </div>
-
-            <div className="px-4 pb-4 pt-3">
-              <div className="mb-3 flex flex-wrap items-center gap-2">
-                {selectedStickerId ? (
-                  <span className="rounded-full border border-yellow-300/50 bg-yellow-300/10 px-3 py-1.5 text-[11px] font-black uppercase tracking-wide text-yellow-100">
-                    Lámina seleccionada
-                  </span>
-                ) : (
-                  <span className="rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-[11px] font-black uppercase tracking-wide text-white/80">
-                    Toca una lámina y luego su espacio
-                  </span>
-                )}
-              </div>
-
-              <div className="flex gap-3 overflow-x-auto pb-1">
-                {visiblePendingStickers.map((sticker) => {
-                  const isSelected = selectedStickerId === sticker.id
-
-                  return (
-                    <button
-                      key={sticker.id}
-                      id={`mobile-sticker-${sticker.id}`}
-                      type="button"
-                      onClick={() => handleSelectMobileSticker(sticker.id)}
-                      className={`group relative w-[94px] shrink-0 overflow-hidden rounded-[20px] border transition-all ${
-                        isSelected
-                          ? 'scale-[1.06] border-yellow-300 bg-[linear-gradient(180deg,#fffef2,#fef3c7)] shadow-[0_18px_32px_rgba(250,204,21,0.26)]'
-                          : 'border-white/10 bg-[linear-gradient(180deg,#ffffff,#ecfeff)] shadow-[0_8px_18px_rgba(15,23,42,0.18)]'
-                      }`}
-                    >
-                      <div className="absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100 [background:linear-gradient(120deg,transparent_15%,rgba(255,255,255,0.82)_40%,transparent_65%)] group-hover:animate-[panini-foil_900ms_linear]" />
-                      <div className="relative h-[118px] overflow-hidden bg-white">
-                        {sticker.art_asset_url ? (
-                          <Image
-                            src={sticker.art_asset_url}
-                            alt={sticker.name}
-                            fill
-                            className="object-cover"
-                          />
-                        ) : (
-                          <div className="flex h-full items-center justify-center text-center text-[10px] font-semibold text-slate-400">
-                            Sin imagen
-                          </div>
-                        )}
-                      </div>
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-          </div>
-        </>
-      ) : null}
-
       <style jsx global>{`
         @keyframes panini-foil {
           0% { transform: translateX(-140%); opacity: 0; }
