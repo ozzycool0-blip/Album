@@ -377,7 +377,7 @@ const INTRO_SELECTION_NAME = 'Indicaciones de llenado'
 const USER_PHOTOS_TABLE = 'user_selection_photos'
 const R2_SIGN_ROUTE = '/api/r2/upload-url'
 const USER_STICKER_PLACEMENTS_TABLE = 'user_sticker_placements'
-const MAX_UPLOAD_SIZE_BYTES = 1 * 512 * 512
+const MAX_UPLOAD_SIZE_BYTES = 512 * 1024
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png']
 
 const INTRO_REFERENCE_IMAGES: IntroReferenceImage[] = [
@@ -727,6 +727,11 @@ export default function AlbumClient() {
     window.location.href = '/premios'
   }
 
+  async function handleLogout() {
+    await supabase.auth.signOut()
+    window.location.href = '/login'
+  }
+
   async function handleSelectionPhotoUpload(
     selection: Selection,
     event: ChangeEvent<HTMLInputElement>
@@ -751,14 +756,23 @@ export default function AlbumClient() {
       return
     }
 
+    if (file.size > MAX_UPLOAD_SIZE_BYTES) {
+      setUploadMessageBySelection((prev) => ({
+        ...prev,
+        [selection.id]: 'La imagen supera el tamaño permitido. El archivo debe ser máximo de 512 Kb.',
+      }))
+      event.target.value = ''
+      return
+    }
+
     try {
       setUploadingSelectionId(selection.id)
       setUploadMessageBySelection((prev) => ({
         ...prev,
-        [selection.id]: 'Procesando imagen...',
+        [selection.id]: 'Validando imagen...',
       }))
 
-      const optimizedFile = await compressImageIfNeeded(file)
+      const optimizedFile = file
 
       if (optimizedFile.size > MAX_UPLOAD_SIZE_BYTES) {
         setUploadMessageBySelection((prev) => ({
@@ -982,6 +996,26 @@ export default function AlbumClient() {
     (currentSelection.id === introSelection?.id ||
       currentSelection.order_index === INTRO_SELECTION_ORDER ||
       currentSelection.name.trim().toLowerCase() === INTRO_SELECTION_NAME.toLowerCase())
+
+  const regularSelections = useMemo(() => {
+    return selections.filter((selection) => {
+      return !(
+        selection.id === introSelection?.id ||
+        selection.order_index === INTRO_SELECTION_ORDER ||
+        selection.name.trim().toLowerCase() === INTRO_SELECTION_NAME.toLowerCase()
+      )
+    })
+  }, [selections, introSelection])
+
+  const totalRegularSelections = regularSelections.length
+
+  const currentRegularSelectionPosition = currentSelection
+    ? regularSelections.findIndex((selection) => selection.id === currentSelection.id) + 1
+    : 0
+
+  const currentSelectionDisplayLabel = isCurrentIntroSelection
+    ? 'Selección 0 · Reto IA'
+    : `Selección ${currentSelection.number ?? currentRegularSelectionPosition} de ${totalRegularSelections}`
 
   const currentSelectionStickers =
     currentSelection && !isCurrentIntroSelection
@@ -1249,6 +1283,14 @@ export default function AlbumClient() {
                   <p className="text-xs text-emerald-100/80">
                     <span className="font-semibold">Tenant:</span> {tenantId}
                   </p>
+
+                  <button
+                    type="button"
+                    onClick={handleLogout}
+                    className="mt-2 inline-flex w-full items-center justify-center rounded-2xl border border-white/15 bg-white/10 px-3 py-2 text-xs font-black uppercase tracking-wide text-white transition hover:bg-white/20"
+                  >
+                    Cerrar sesión
+                  </button>
                 </div>
 
                 <div className="relative mt-3 rounded-2xl border border-white/15 bg-white/10 p-3.5 shadow-inner">
@@ -1421,6 +1463,16 @@ export default function AlbumClient() {
 
           <section className="min-w-0">
             <div className="space-y-3">
+              <div className="flex justify-end xl:hidden">
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="rounded-full border border-white/15 bg-slate-950/70 px-4 py-2 text-xs font-black uppercase tracking-wide text-white shadow-lg backdrop-blur-xl transition hover:bg-slate-900"
+                >
+                  Cerrar sesión
+                </button>
+              </div>
+
               {isMobile && pendingIssuedStickers.length > 0 ? (
                 <div className="sticky top-3 z-30 overflow-hidden rounded-[24px] border border-white/15 bg-slate-950/85 shadow-[0_18px_40px_rgba(2,8,23,0.45)] backdrop-blur-xl lg:hidden">
                   <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
@@ -1674,7 +1726,7 @@ export default function AlbumClient() {
                         }}
                       >
                         <BallIcon />
-                        Selección {currentSelection.number ?? currentSelectionIndex + 1} de {selections.length}
+                        {currentSelectionDisplayLabel}
                       </div>
 
                       <h2 className="mt-2.5 text-[1.7rem] sm:text-[2rem] lg:text-[2.25rem] font-black tracking-tight leading-tight text-slate-900">
@@ -1796,7 +1848,7 @@ export default function AlbumClient() {
                               RETO IA
                             </h3>
                             <p className="mt-2 text-sm leading-6 text-slate-700">
-                              En esta selección no se entregan láminas. Todos los usuarios crear una foto ilustrada utilizando un GPT (Chatgpt,Gemini,claudeai entre otros) y subirla, una vez realices esto esta selección quedará completada.
+                              En esta selección no se entregan láminas. Todos los usuarios deben crear una foto ilustrada utilizando un GPT (Chatgpt,Gemini,claudeai entre otros) y subirla, una vez realices esto esta selección quedará completada.
                             </p>
 
                             <div className="mt-4">
@@ -1830,7 +1882,7 @@ export default function AlbumClient() {
                               />
 
                               <p className="mt-2 text-xs font-medium text-slate-500">
-                                Formatos permitidos: JPG, JPEG o PNG. Tamaño máximo final: 512 Kb.
+                                Formatos permitidos: JPG, JPEG o PNG. Tamaño máximo: 512 Kb.
                               </p>
 
                               {uploadMessageBySelection[currentSelection.id] ? (
