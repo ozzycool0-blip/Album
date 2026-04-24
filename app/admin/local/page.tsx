@@ -197,7 +197,6 @@ const [selectedDeleteUserId, setSelectedDeleteUserId] = useState('')
         usersRes,
         selectionsRes,
         stickersRes,
-        issuedRes,
         placementsRes,
         packsRes,
         photosRes,
@@ -218,12 +217,6 @@ const [selectedDeleteUserId, setSelectedDeleteUserId] = useState('')
           .eq('tenant_id', currentTenantId)
           .eq('is_active', true)
           .order('sticker_number', { ascending: true }),
-        tenantUserIds.length > 0
-          ? supabase
-              .from('issued_stickers')
-              .select('id, user_id, sticker_id, pack_id, created_at')
-              .in('user_id', tenantUserIds)
-          : Promise.resolve({ data: [], error: null }),
         supabase
           .from('user_sticker_placements')
           .select('id, user_id, sticker_id, selection_id, tenant_id, created_at')
@@ -239,12 +232,54 @@ const [selectedDeleteUserId, setSelectedDeleteUserId] = useState('')
           .eq('tenant_id', currentTenantId),
       ])
 
+      const tenantPacks = (packsRes.data as StickerPackRow[]) || []
+      const tenantPackIds = tenantPacks.map((pack) => pack.id)
+      const packOwnerById = tenantPacks.reduce<Record<string, string>>((acc, pack) => {
+        acc[pack.id] = pack.user_id
+        return acc
+      }, {})
+
+      const [issuedByUsersRes, issuedByPacksRes] = await Promise.all([
+        tenantUserIds.length > 0
+          ? supabase
+              .from('issued_stickers')
+              .select('id, user_id, sticker_id, pack_id')
+              .in('user_id', tenantUserIds)
+          : Promise.resolve({ data: [], error: null }),
+        tenantPackIds.length > 0
+          ? supabase
+              .from('issued_stickers')
+              .select('id, user_id, sticker_id, pack_id')
+              .in('pack_id', tenantPackIds)
+          : Promise.resolve({ data: [], error: null }),
+      ])
+
+      if (issuedByUsersRes.error || issuedByPacksRes.error) {
+        console.error('Error cargando láminas entregadas:', issuedByUsersRes.error || issuedByPacksRes.error)
+      }
+
+      const issuedMap = new Map<string, IssuedStickerRow>()
+      const registerIssued = (rows: IssuedStickerRow[] = []) => {
+        rows.forEach((item) => {
+          const userId = item.user_id || (item.pack_id ? packOwnerById[item.pack_id] : '')
+          if (!userId || !item.sticker_id) return
+
+          issuedMap.set(item.id || userId + '-' + item.sticker_id + '-' + (item.pack_id || 'sin-pack'), {
+            ...item,
+            user_id: userId,
+          })
+        })
+      }
+
+      registerIssued((issuedByUsersRes.data as IssuedStickerRow[]) || [])
+      registerIssued((issuedByPacksRes.data as IssuedStickerRow[]) || [])
+
       setUsers((usersRes.data as UserRow[]) || [])
       setSelections((selectionsRes.data as SelectionRow[]) || [])
       setStickers((stickersRes.data as StickerRow[]) || [])
-      setIssuedStickers((issuedRes.data as IssuedStickerRow[]) || [])
+      setIssuedStickers(Array.from(issuedMap.values()))
       setPlacements((placementsRes.data as PlacementRow[]) || [])
-      setPacks((packsRes.data as StickerPackRow[]) || [])
+      setPacks(tenantPacks)
       setUserSelectionPhotos((photosRes.data as UserSelectionPhotoRow[]) || [])
 
       const firstUserId = ((usersRes.data as UserRow[]) || [])[0]?.id || ''
@@ -493,7 +528,7 @@ const [selectedDeleteUserId, setSelectedDeleteUserId] = useState('')
     const headers = [
       'Usuario',
       'Correo',
-      'Emitidas',
+      'Entregadas',
       'Pegadas',
       'Faltantes',
       'Selecciones completas',
@@ -538,7 +573,7 @@ const [selectedDeleteUserId, setSelectedDeleteUserId] = useState('')
       'Correo',
       'Selecciones completas',
       'Pegadas',
-      'Emitidas',
+      'Entregadas',
       'Progreso (%)',
     ]
 
@@ -635,7 +670,7 @@ const [selectedDeleteUserId, setSelectedDeleteUserId] = useState('')
     const availableStickers = stickers.filter((sticker) => !alreadyIssuedIds.has(sticker.id))
 
     if (availableStickers.length === 0) {
-      setGlobalMessage(`El usuario ${user.email} ya tiene todas las láminas emitidas.`)
+      setGlobalMessage(`El usuario ${user.email} ya tiene todas las láminas entregadas.`)
       return
     }
 
@@ -877,7 +912,7 @@ const [selectedDeleteUserId, setSelectedDeleteUserId] = useState('')
                   <div className="text-sm text-slate-600">{selectedUser.email}</div>
                   <div className="mt-3 grid grid-cols-3 gap-2 text-center">
                     <div className="rounded-xl bg-white p-2">
-                      <div className="text-[10px] font-black uppercase text-slate-500">Emitidas</div>
+                      <div className="text-[10px] font-black uppercase text-slate-500">Entregadas</div>
                       <div className="mt-1 text-lg font-black text-slate-900">{selectedUserIssuedIds.size}</div>
                     </div>
                     <div className="rounded-xl bg-white p-2">
@@ -979,7 +1014,7 @@ const [selectedDeleteUserId, setSelectedDeleteUserId] = useState('')
                     <div className="mt-2 text-3xl font-black text-slate-900">{totalSelections}</div>
                   </div>
                   <div className="rounded-[26px] border border-slate-200 bg-white p-5 shadow-sm">
-                    <div className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">Emitidas</div>
+                    <div className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">Entregadas</div>
                     <div className="mt-2 text-3xl font-black text-slate-900">{totalIssued}</div>
                   </div>
                   <div className="rounded-[26px] border border-slate-200 bg-white p-5 shadow-sm">
@@ -1018,7 +1053,7 @@ const [selectedDeleteUserId, setSelectedDeleteUserId] = useState('')
                       <thead>
                         <tr className="border-b border-slate-200 text-left">
                           <th className="pb-3 pr-4 font-black text-slate-700">Usuario</th>
-                          <th className="pb-3 pr-4 font-black text-slate-700">Emitidas</th>
+                          <th className="pb-3 pr-4 font-black text-slate-700">Entregadas</th>
                           <th className="pb-3 pr-4 font-black text-slate-700">Pegadas</th>
                           <th className="pb-3 pr-4 font-black text-slate-700">Faltantes</th>
                           <th className="pb-3 pr-4 font-black text-slate-700">Selecciones completas</th>
@@ -1226,7 +1261,7 @@ const [selectedDeleteUserId, setSelectedDeleteUserId] = useState('')
                           <th className="pb-3 pr-4 font-black text-slate-700">Correo</th>
                           <th className="pb-3 pr-4 font-black text-slate-700">Selecciones completas</th>
                           <th className="pb-3 pr-4 font-black text-slate-700">Pegadas</th>
-                          <th className="pb-3 pr-4 font-black text-slate-700">Emitidas</th>
+                          <th className="pb-3 pr-4 font-black text-slate-700">Entregadas</th>
                           <th className="pb-3 pr-4 font-black text-slate-700">% avance</th>
                         </tr>
                       </thead>
@@ -1332,7 +1367,7 @@ const [selectedDeleteUserId, setSelectedDeleteUserId] = useState('')
                       </div>
                     </div>
                     <div className="rounded-2xl bg-slate-50 p-4">
-                      <div className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">Láminas emitidas</div>
+                      <div className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">Láminas entregadas</div>
                       <div className="mt-1 text-2xl font-black text-slate-900">{selectedUserIssuedIds.size}</div>
                     </div>
                     <div className="rounded-2xl bg-slate-50 p-4">
