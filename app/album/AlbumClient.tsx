@@ -1422,7 +1422,7 @@ export default function AlbumClient() {
           <section className="min-w-0">
             <div className="space-y-3">
               {isMobile && pendingIssuedStickers.length > 0 ? (
-                <div className="overflow-hidden rounded-[24px] border border-white/15 bg-slate-950/85 shadow-[0_18px_40px_rgba(2,8,23,0.45)] backdrop-blur-xl lg:hidden">
+                <div className="sticky top-3 z-30 overflow-hidden rounded-[24px] border border-white/15 bg-slate-950/85 shadow-[0_18px_40px_rgba(2,8,23,0.45)] backdrop-blur-xl lg:hidden">
                   <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
                     <div>
                       <div className="text-[10px] font-black uppercase tracking-[0.22em] text-cyan-200">Panel táctil</div>
