@@ -379,6 +379,7 @@ const R2_SIGN_ROUTE = '/api/r2/upload-url'
 const USER_STICKER_PLACEMENTS_TABLE = 'user_sticker_placements'
 const MAX_UPLOAD_SIZE_BYTES = 512 * 1024
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png']
+const SESSION_INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000
 
 const INTRO_REFERENCE_IMAGES: IntroReferenceImage[] = [
   { src: '/stickers/premio1.png', title: 'Premio # 1' },
@@ -474,6 +475,37 @@ export default function AlbumClient() {
   const [lastPlacedStickerId, setLastPlacedStickerId] = useState<string | null>(null)
   const [flyingSticker, setFlyingSticker] = useState<FlyingStickerState | null>(null)
   const feedbackTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    let inactivityTimer: ReturnType<typeof setTimeout>
+
+    const logoutForInactivity = async () => {
+      await supabase.auth.signOut()
+      window.location.href = '/login'
+    }
+
+    const resetInactivityTimer = () => {
+      clearTimeout(inactivityTimer)
+      inactivityTimer = setTimeout(logoutForInactivity, SESSION_INACTIVITY_TIMEOUT_MS)
+    }
+
+    const activityEvents = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll']
+
+    activityEvents.forEach((eventName) => {
+      window.addEventListener(eventName, resetInactivityTimer, { passive: true })
+    })
+
+    resetInactivityTimer()
+
+    return () => {
+      clearTimeout(inactivityTimer)
+      activityEvents.forEach((eventName) => {
+        window.removeEventListener(eventName, resetInactivityTimer)
+      })
+    }
+  }, [])
 
   useEffect(() => {
     const syncViewport = () => {
@@ -1013,9 +1045,11 @@ export default function AlbumClient() {
     ? regularSelections.findIndex((selection) => selection.id === currentSelection.id) + 1
     : 0
 
-  const currentSelectionDisplayLabel = isCurrentIntroSelection
-    ? 'Selección 0 · Reto IA'
-    : `Selección ${currentSelection.number ?? currentRegularSelectionPosition} de ${totalRegularSelections}`
+  const currentSelectionDisplayLabel = !currentSelection
+    ? ''
+    : isCurrentIntroSelection
+      ? 'Selección 0 · Reto IA'
+      : `Selección ${currentSelection.number ?? currentRegularSelectionPosition} de ${totalRegularSelections}`
 
   const currentSelectionStickers =
     currentSelection && !isCurrentIntroSelection
