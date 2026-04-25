@@ -1685,14 +1685,19 @@ export default function AlbumClient() {
                               >
 
                                 <div className="relative h-[110px] overflow-hidden bg-white">
+                                  {/* Barra superior con nombre de la selección */}
+                                  <div className="absolute top-0 left-0 right-0 z-10 bg-black/70 text-white text-[7px] font-black uppercase tracking-[0.05em] px-1 py-[1px] text-center">
+                                    {selections.find(s => s.id === sticker.selection_id)?.name}
+                                  </div>
                                   {sticker.art_asset_url ? (
                                     <Image
                                       src={sticker.art_asset_url}
                                       alt={sticker.name}
                                       fill
-                                      className="object-cover"
+                                      className="object-cover pt-[12px]"
                                     />
                                   ) : (
+
                                     <div className="flex h-full items-center justify-center text-center text-[10px] font-semibold text-slate-400">
                                       Sin imagen
                                     </div>
